@@ -1,0 +1,201 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta
+      name="description"
+      content="ManGo ($MNGO) — a mango on Solana."
+    />
+    <title>ManGo</title>
+    <link rel="icon" type="image/png" href="/src/assets/logo.png" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Fredoka:wght@500;600;700&family=Nunito:wght@400;600;700&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="/styles.css" />
+  </head>
+  <body>
+    <div class="sky-birds" id="sky-birds" aria-hidden="true"></div>
+    <div class="sky-clouds" id="sky-clouds" aria-hidden="true"></div>
+    <div class="sky-particles" id="sky-particles" aria-hidden="true"></div>
+    <div class="hero-sun-glow" aria-hidden="true"></div>
+    <div class="ocean-atmosphere" aria-hidden="true"></div>
+
+    <header class="site-nav">
+      <button
+        class="hamburger"
+        id="menu-toggle"
+        type="button"
+        aria-expanded="false"
+        aria-controls="nav-menu"
+        aria-label="Open menu"
+      >
+        <span class="hamburger__bar"></span>
+        <span class="hamburger__bar"></span>
+        <span class="hamburger__bar"></span>
+      </button>
+
+      <nav class="nav-menu" id="nav-menu" aria-label="Main navigation">
+        <a href="#about">About</a>
+        <a href="#token">Mint</a>
+        <a
+          href="https://solscan.io/token/29KN57rM6tV2aWdo1agZcF6ynPXB1dhHdKHNrrAmaNGo"
+          target="_blank"
+          rel="noopener noreferrer"
+        >
+          Solscan
+        </a>
+      </nav>
+    </header>
+
+    <div class="nav-overlay" id="nav-overlay" aria-hidden="true"></div>
+
+    <section class="hero" id="top">
+      <div class="container hero-inner">
+        <div class="hero-content">
+          <div class="hero-identity">
+            <div class="hero-brand">
+              <span class="hero-logo-wrap">
+                <img
+                  class="hero-logo"
+                  src="/src/assets/logo.png"
+                  alt=""
+                  width="179"
+                  height="179"
+                />
+              </span>
+              <h1 class="hero-title">ManGo</h1>
+            </div>
+            <p class="hero-tagline">A mango on Solana.</p>
+            <p class="hero-subtext">
+              Sometimes the smallest things leave the biggest memories.
+            </p>
+          </div>
+          <div class="hero-actions">
+            <button class="btn btn-copy copy-mint-btn" type="button">Copy Mint</button>
+            <a
+              class="btn btn-solscan"
+              href="https://solscan.io/token/29KN57rM6tV2aWdo1agZcF6ynPXB1dhHdKHNrrAmaNGo"
+              target="_blank"
+              rel="noopener noreferrer"
+            >
+              View on Solscan
+            </a>
+          </div>
+          <p class="copy-feedback" role="status" aria-live="polite"></p>
+        </div>
+      </div>
+    </section>
+
+    <main class="journey">
+      <section class="chapter chapter-about" id="about">
+        <div class="chapter-inner chapter-inner--about">
+          <p class="chapter-label chapter-label--featured reveal">About ManGo</p>
+          <div class="glass-card glass-card--featured reveal">
+            <span class="glass-card__reflection" aria-hidden="true"></span>
+            <div class="prose prose-about">
+              <p>Sometimes a simple thing becomes more than what it is.</p>
+              <p>
+                A mango can be just a fruit.<br />
+                But sometimes it becomes a memory, a smile, a spark, a moment of connection.
+              </p>
+              <p>
+                ManGo was inspired by that feeling, the rare kind of click between people
+                that cannot be forced, bought, or explained.
+              </p>
+              <p>
+                It stands for good energy, unexpected bonds, and the small moments that stay
+                with you longer than you expected.
+              </p>
+              <p class="prose-quiet">No fake promises.<br />No forced hype.</p>
+              <p class="prose-closing">
+                Just a mango on Solana, carrying a little meaning with it.
+              </p>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section class="chapter chapter-token" id="token">
+        <div class="chapter-inner chapter-inner--token">
+          <p class="chapter-label chapter-label--compact reveal">Token Information</p>
+          <div class="glass-card glass-card--compact reveal">
+            <ul class="token-facts">
+              <li><span>Ticker</span><strong>$MNGO</strong></li>
+              <li><span>Chain</span><strong>Solana</strong></li>
+            </ul>
+            <p class="token-label">Mint address</p>
+            <div class="mint-row">
+              <div class="mint-scroll">
+                <code class="mint-address" id="mint-address">
+                  29KN57rM6tV2aWdo1agZcF6ynPXB1dhHdKHNrrAmaNGo
+                </code>
+              </div>
+              <button
+                class="mint-copy-btn copy-mint-btn"
+                type="button"
+                aria-label="Copy mint address"
+              >
+                <svg class="mint-copy-icon" viewBox="0 0 24 24" aria-hidden="true">
+                  <rect x="9" y="9" width="11" height="11" rx="2" fill="none" stroke="currentColor" stroke-width="1.75"/>
+                  <path d="M6 15H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v1" fill="none" stroke="currentColor" stroke-width="1.75"/>
+                </svg>
+                <svg class="mint-copy-icon mint-copy-icon--check" viewBox="0 0 24 24" aria-hidden="true">
+                  <path d="M6 12.5l3.5 3.5L18 8" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                </svg>
+              </button>
+            </div>
+            <p class="copy-feedback" role="status" aria-live="polite"></p>
+            <div class="token-actions">
+              <button class="btn btn-copy copy-mint-btn" type="button" aria-label="Copy mint address">
+                <span class="copy-text">Copy Mint</span>
+              </button>
+              <a
+                class="btn btn-solscan"
+                href="https://solscan.io/token/29KN57rM6tV2aWdo1agZcF6ynPXB1dhHdKHNrrAmaNGo"
+                target="_blank"
+                rel="noopener noreferrer"
+              >
+                View on Solscan
+              </a>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section class="chapter chapter-community" id="community">
+        <div class="chapter-inner chapter-inner--community">
+          <p class="chapter-label chapter-label--float reveal">Community</p>
+          <div class="float-text reveal">
+            <p class="coming-soon">Still gathering.</p>
+            <p class="coming-soon-note">A shared space is taking shape — together.</p>
+          </div>
+        </div>
+      </section>
+
+      <section class="chapter chapter-disclaimer" id="disclaimer">
+        <div class="chapter-inner chapter-inner--disclaimer">
+          <p class="chapter-label chapter-label--minimal reveal">Disclaimer</p>
+          <div class="glass-strip glass-strip--minimal reveal">
+            <p class="prose-disclaimer">
+              ManGo ($MNGO) is a meme token for entertainment. It is not financial advice
+              and there are no guarantees of profit or price increase. Always do your own
+              research.
+            </p>
+          </div>
+        </div>
+      </section>
+    </main>
+
+    <footer class="footer">
+      <div class="container">
+        <p>ManGo · $MNGO · Solana</p>
+      </div>
+    </footer>
+
+    <script type="module" src="/script.js"></script>
+  </body>
+</html>
