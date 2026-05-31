@@ -136,7 +136,7 @@ function initNavMenu() {
 
 /* ── Scroll reveal ── */
 
-const REVEAL_ANIMATION_MS = 1000;
+const REVEAL_ANIMATION_MS = 1050;
 
 function assignRevealStagger() {
   document.querySelectorAll(".chapter").forEach((chapter) => {
