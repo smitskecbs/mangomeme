@@ -46,7 +46,10 @@ body::before {
   position: fixed;
   inset: 0;
   z-index: -2;
-  background: url("./src/assets/background.png") center top / cover no-repeat;
+  background-image: url("./src/assets/background.png");
+  background-position: center top;
+  background-size: cover;
+  background-repeat: no-repeat;
   pointer-events: none;
 }
 
@@ -1268,6 +1271,20 @@ body.menu-open {
 /* ── Mobile ── */
 
 @media (max-width: 640px) {
+  body::before {
+    background-position: 48% 37%;
+    background-size: cover;
+  }
+
+  body::after {
+    background: linear-gradient(
+      180deg,
+      rgba(8, 45, 62, 0.12) 0%,
+      rgba(11, 79, 108, 0.18) 42%,
+      rgba(11, 79, 108, 0.3) 100%
+    );
+  }
+
   .hero {
     min-height: 100svh;
     padding-top: clamp(5rem, 10vh, 6.5rem);
@@ -1387,7 +1404,17 @@ body.menu-open {
   }
 }
 
+@media (max-width: 640px) and (orientation: landscape) {
+  body::before {
+    background-position: 50% 44%;
+  }
+}
+
 @media (max-width: 380px) {
+  body::before {
+    background-position: 46% 35%;
+  }
+
   .hero-logo {
     width: clamp(124px, 28vw, 152px);
   }
