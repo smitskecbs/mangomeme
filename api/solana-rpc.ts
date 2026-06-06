@@ -1,5 +1,5 @@
 import dotenv from "dotenv";
-import { forwardSolanaRpc } from "../lib/solanaRpcProxy.ts";
+import { forwardSolanaRpc } from "../lib/solanaRpcProxy";
 
 dotenv.config();
 
