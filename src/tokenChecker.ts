@@ -133,28 +133,28 @@ function scoreMetadata(dex: Pick<DexAggregated, "name" | "symbol" | "hasMedia">)
 }
 
 function scoreSupplyStructure(
-  topHolderPct: number | null,
-  top10Pct: number | null
+  topHolderPercentage: number | null,
+  top10HolderPercentage: number | null
 ) {
   const notes: string[] = [];
   let topHolderScore = 0;
   let top10Score = 0;
 
-  if (topHolderPct == null) {
+  if (topHolderPercentage == null) {
     notes.push("Holder distribution could not be calculated.");
     return { score: 0, max: 20, notes };
   }
 
-  if (topHolderPct < 10) {
+  if (topHolderPercentage < 10) {
     topHolderScore = 12;
     notes.push("Top holder concentration is excellent (under 10%).");
-  } else if (topHolderPct < 20) {
+  } else if (topHolderPercentage < 20) {
     topHolderScore = 10;
     notes.push("Top holder concentration is good (under 20%).");
-  } else if (topHolderPct < 35) {
+  } else if (topHolderPercentage < 35) {
     topHolderScore = 7;
     notes.push("Top holder concentration is average (under 35%).");
-  } else if (topHolderPct < 50) {
+  } else if (topHolderPercentage < 50) {
     topHolderScore = 4;
     notes.push("Top holder concentration is elevated (under 50%).");
   } else {
@@ -162,17 +162,17 @@ function scoreSupplyStructure(
     notes.push("Top holder controls more than 50% of supply.");
   }
 
-  if (top10Pct != null) {
-    if (top10Pct < 25) {
+  if (top10HolderPercentage != null) {
+    if (top10HolderPercentage < 25) {
       top10Score = 8;
       notes.push("Top 10 holders show strong decentralization.");
-    } else if (top10Pct < 40) {
+    } else if (top10HolderPercentage < 40) {
       top10Score = 6;
       notes.push("Top 10 holder concentration is moderate.");
-    } else if (top10Pct < 60) {
+    } else if (top10HolderPercentage < 60) {
       top10Score = 4;
       notes.push("Top 10 holders control a notable share of supply.");
-    } else if (top10Pct < 80) {
+    } else if (top10HolderPercentage < 80) {
       top10Score = 2;
       notes.push("Top 10 holders are highly concentrated.");
     } else {
@@ -329,7 +329,7 @@ function scoreLiquidityQuality(poolCount: number, liquidityUsd: number) {
 function buildWarnings(report: TokenHealthReport): string[] {
   const warnings: string[] = [];
 
-  if (report.topHolderPct != null && report.topHolderPct > 50) {
+  if (report.topHolderPercentage != null && report.topHolderPercentage > 50) {
     warnings.push("Top holder controls more than 50% of supply.");
   }
   if (report.liquidityUsd < 1_000) {
@@ -391,7 +391,10 @@ export async function analyzeTokenHealth(mint: string): Promise<TokenHealthResul
   const dex = aggregateDexPairs(pairs);
 
   const metadata = scoreMetadata(dex);
-  const supply = scoreSupplyStructure(holders.topHolderPct, holders.top10Pct);
+  const supply = scoreSupplyStructure(
+    holders.topHolderPercentage,
+    holders.top10HolderPercentage
+  );
   const liquidity = scoreLiquidity(dex.liquidityUsd);
   const activity = scoreMarketActivity(dex.volume24h);
   const age = scoreTokenAge(dex.ageDays);
@@ -424,8 +427,8 @@ export async function analyzeTokenHealth(mint: string): Promise<TokenHealthResul
     liquidityUsd: dex.liquidityUsd,
     marketCap: dex.marketCap,
     volume24h: dex.volume24h,
-    topHolderPct: holders.topHolderPct,
-    top10Pct: holders.top10Pct,
+    topHolderPercentage: holders.topHolderPercentage,
+    top10HolderPercentage: holders.top10HolderPercentage,
     mintAuthorityRevoked: authorities.mintAuthorityRevoked,
     freezeAuthorityRevoked: authorities.freezeAuthorityRevoked,
     ageDays: dex.ageDays,
@@ -505,8 +508,8 @@ function renderModalReport(
       <div><span>Liquidity</span><strong>${formatUsd(report.liquidityUsd)}</strong></div>
       <div><span>Market Cap</span><strong>${formatUsd(report.marketCap)}</strong></div>
       <div><span>24h Volume</span><strong>${formatUsd(report.volume24h)}</strong></div>
-      <div><span>Top Holder</span><strong>${formatPercent(report.topHolderPct)}</strong></div>
-      <div><span>Top 10 Holders</span><strong>${formatPercent(report.top10Pct)}</strong></div>
+      <div><span>Top Holder</span><strong>${formatPercent(report.topHolderPercentage)}</strong></div>
+      <div><span>Top 10 Holders</span><strong>${formatPercent(report.top10HolderPercentage)}</strong></div>
       <div><span>Mint Authority</span><strong>${formatAuthority(report.mintAuthorityRevoked)}</strong></div>
       <div><span>Freeze Authority</span><strong>${formatAuthority(report.freezeAuthorityRevoked)}</strong></div>
       <div><span>Token Age</span><strong>${ageText}</strong></div>

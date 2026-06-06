@@ -6,6 +6,7 @@ import {
   type MintAuthorities,
   type RpcAccountInfoResult,
   type RpcLargestAccountsResult,
+  type RpcTokenBalanceValue,
   type RpcTokenSupplyResult,
   type SolanaAddress,
 } from "./tokenHealthTypes.ts";
@@ -84,6 +85,53 @@ function parseMintAuthorities(base64Data: string): MintAuthorities {
   };
 }
 
+function parseRawTokenAmount(value: RpcTokenBalanceValue | undefined): bigint | null {
+  if (!value) {
+    return null;
+  }
+
+  if (value.amount) {
+    try {
+      return BigInt(value.amount);
+    } catch {
+      // Fall through to uiAmountString.
+    }
+  }
+
+  if (value.uiAmountString) {
+    const [whole, fraction = ""] = value.uiAmountString.split(".");
+    const decimals = value.decimals ?? 0;
+    const paddedFraction = fraction.padEnd(decimals, "0").slice(0, decimals);
+    const raw = `${whole}${paddedFraction}`.replace(/^(-?)0+(?=\d)/, "$1");
+
+    try {
+      return BigInt(raw || "0");
+    } catch {
+      return null;
+    }
+  }
+
+  if (value.uiAmount != null) {
+    const decimals = value.decimals ?? 0;
+    const scaled = Math.round(value.uiAmount * 10 ** decimals);
+
+    if (Number.isFinite(scaled)) {
+      return BigInt(scaled);
+    }
+  }
+
+  return null;
+}
+
+function percentageOf(part: bigint, total: bigint): number {
+  if (total === 0n) {
+    return 0;
+  }
+
+  const basisPoints = (part * 10000n) / total;
+  return Number(basisPoints) / 100;
+}
+
 export function assertValidMintAddress(mint: string): SolanaAddress {
   const normalizedMint = mint.trim();
 
@@ -109,33 +157,48 @@ export async function fetchMintAuthorities(
   return parseMintAuthorities(result.value.data[0]);
 }
 
+/**
+ * Holder concentration from the RPC largest-accounts sample only.
+ * Uses getTokenLargestAccounts + getTokenSupply — never enumerates all holders.
+ */
 export async function fetchHolderStats(mint: SolanaAddress): Promise<HolderStats> {
   const [largestAccounts, supply] = await Promise.all([
     rpcCall<RpcLargestAccountsResult>("getTokenLargestAccounts", [mint]),
     rpcCall<RpcTokenSupplyResult>("getTokenSupply", [mint]),
   ]);
 
-  const totalSupply = Number(supply?.value?.uiAmount ?? 0);
   const accounts = largestAccounts?.value ?? [];
+  const totalSupplyRaw = parseRawTokenAmount(supply?.value);
 
-  if (!totalSupply || !accounts.length) {
+  if (!totalSupplyRaw || totalSupplyRaw === 0n || !accounts.length) {
     return {
-      topHolderPct: null,
-      top10Pct: null,
-      holderCount: accounts.length,
+      topHolderPercentage: null,
+      top10HolderPercentage: null,
+      largestAccountsReturned: accounts.length,
     };
   }
 
-  const amounts = accounts.map((account) => Number(account.uiAmount ?? 0));
-  const topHolderPct = (amounts[0] / totalSupply) * 100;
-  const top10Pct =
-    (amounts.slice(0, 10).reduce((sum, amount) => sum + amount, 0) /
-      totalSupply) *
-    100;
+  const rawAmounts = accounts
+    .map((account) => parseRawTokenAmount(account))
+    .filter((amount): amount is bigint => amount != null && amount > 0n);
+
+  if (!rawAmounts.length) {
+    return {
+      topHolderPercentage: null,
+      top10HolderPercentage: null,
+      largestAccountsReturned: accounts.length,
+    };
+  }
+
+  const topHolderPercentage = percentageOf(rawAmounts[0], totalSupplyRaw);
+  const top10Sum = rawAmounts
+    .slice(0, 10)
+    .reduce((sum, amount) => sum + amount, 0n);
+  const top10HolderPercentage = percentageOf(top10Sum, totalSupplyRaw);
 
   return {
-    topHolderPct,
-    top10Pct,
-    holderCount: accounts.length,
+    topHolderPercentage,
+    top10HolderPercentage,
+    largestAccountsReturned: accounts.length,
   };
 }

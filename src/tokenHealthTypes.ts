@@ -16,8 +16,8 @@ export interface TokenHealthReport {
   liquidityUsd: number;
   marketCap: number;
   volume24h: number;
-  topHolderPct: number | null;
-  top10Pct: number | null;
+  topHolderPercentage: number | null;
+  top10HolderPercentage: number | null;
   mintAuthorityRevoked: boolean;
   freezeAuthorityRevoked: boolean;
   ageDays: number | null;
@@ -53,9 +53,9 @@ export interface MintAuthorities {
 }
 
 export interface HolderStats {
-  topHolderPct: number | null;
-  top10Pct: number | null;
-  holderCount: number;
+  topHolderPercentage: number | null;
+  top10HolderPercentage: number | null;
+  largestAccountsReturned: number;
 }
 
 export interface JsonRpcRequest {
@@ -87,14 +87,19 @@ export interface RpcTokenAmount {
   uiAmount: number | null;
 }
 
+export interface RpcTokenBalanceValue {
+  amount?: string;
+  decimals?: number;
+  uiAmount?: number | null;
+  uiAmountString?: string;
+}
+
 export interface RpcLargestAccountsResult {
-  value: Array<{ uiAmount: number | null }>;
+  value: Array<RpcTokenBalanceValue & { address?: string }>;
 }
 
 export interface RpcTokenSupplyResult {
-  value: {
-    uiAmount: number | null;
-  };
+  value: RpcTokenBalanceValue;
 }
 
 export interface DexScreenerPair {
