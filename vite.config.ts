@@ -1,6 +1,6 @@
 import type { Connect } from "vite";
 import { defineConfig, loadEnv } from "vite";
-import { createSolanaRpcMiddleware } from "./lib/solanaRpcProxy.ts";
+import { createSolanaRpcMiddleware } from "./lib/solanaRpcProxy";
 
 function attachSolanaRpcProxy(
   server: { middlewares: Connect.Server },
