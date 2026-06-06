@@ -41,6 +41,7 @@
       <nav class="nav-menu" id="nav-menu" aria-label="Main navigation">
         <a href="#about">About</a>
         <a href="#token">Mint</a>
+        <a href="#checker">Checker</a>
         <a
           href="https://explorer.solana.com/address/29KN57rM6tV2aWdo1agZcF6ynPXB1dhHdKHNrrAmaNGo"
           target="_blank"
@@ -166,6 +167,47 @@
         </div>
       </section>
 
+      <section class="chapter chapter-checker" id="checker">
+        <div class="chapter-inner chapter-inner--checker">
+          <p class="chapter-label chapter-label--compact reveal">Token Health Checker</p>
+          <div class="glass-card glass-card--compact checker-card reveal">
+            <img
+              class="checker-card__image"
+              src="/token_checker/checker.png"
+              alt="ManGo token health checker"
+              width="280"
+              height="160"
+            />
+            <p class="checker-card__intro">
+              Enter any Solana mint address for a factual health analysis based on
+              liquidity, holders, authorities, and market activity.
+            </p>
+            <form class="checker-form" id="token-checker-form">
+              <label class="checker-form__label" for="token-checker-input">Mint address</label>
+              <input
+                class="checker-form__input"
+                id="token-checker-input"
+                type="text"
+                name="mint"
+                placeholder="Paste Solana mint address"
+                autocomplete="off"
+                spellcheck="false"
+                required
+              />
+              <button class="btn btn-copy checker-form__submit" id="token-checker-submit" type="submit">
+                Analyze Token
+              </button>
+            </form>
+            <div class="checker-loading" id="token-checker-loading" hidden>
+              <span class="checker-loading__spinner" aria-hidden="true"></span>
+              <span>Analyzing on-chain data…</span>
+            </div>
+            <p class="checker-status" id="token-checker-status" role="status" aria-live="polite"></p>
+            <p class="checker-disclaimer">Not financial advice. Always do your own research.</p>
+          </div>
+        </div>
+      </section>
+
       <section class="chapter chapter-community" id="community">
         <div class="chapter-inner chapter-inner--community">
           <p class="chapter-label chapter-label--float reveal">Community</p>
@@ -240,5 +282,6 @@
     </footer>
 
     <script type="module" src="/script.js"></script>
+    <script type="module" src="/src/main.ts"></script>
   </body>
 </html>
