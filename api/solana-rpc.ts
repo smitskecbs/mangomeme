@@ -1,8 +1,3 @@
-import dotenv from "dotenv";
-import { forwardSolanaRpc } from "../lib/solanaRpcProxy";
-
-dotenv.config();
-
 interface VercelRequest {
   method?: string;
   body?: unknown;
@@ -46,10 +41,40 @@ export default async function handler(
     return;
   }
 
-  const { status, payload } = await forwardSolanaRpc(
-    body as Parameters<typeof forwardSolanaRpc>[0],
-    rpcUrl
-  );
+  try {
+    const rpcResponse = await fetch(rpcUrl, {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+      },
+      body: JSON.stringify(body),
+    });
 
-  res.status(status).json(payload);
+    const text = await rpcResponse.text();
+
+    let payload: unknown;
+    try {
+      payload = JSON.parse(text);
+    } catch {
+      payload = {
+        jsonrpc: "2.0",
+        id: 1,
+        error: { code: -32000, message: "Invalid RPC response." },
+      };
+    }
+
+    res.status(rpcResponse.ok ? 200 : rpcResponse.status).json(payload);
+  } catch (error) {
+    res.status(502).json({
+      jsonrpc: "2.0",
+      id: 1,
+      error: {
+        code: -32000,
+        message:
+          error instanceof Error
+            ? error.message
+            : "Unable to reach Solana RPC.",
+      },
+    });
+  }
 }
