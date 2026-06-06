@@ -18,6 +18,7 @@ export interface TokenHealthReport {
   volume24h: number;
   topHolderPercentage: number | null;
   top10HolderPercentage: number | null;
+  holderAnalysisUnavailable: boolean;
   mintAuthorityRevoked: boolean;
   freezeAuthorityRevoked: boolean;
   ageDays: number | null;
@@ -56,7 +57,11 @@ export interface HolderStats {
   topHolderPercentage: number | null;
   top10HolderPercentage: number | null;
   largestAccountsReturned: number;
+  analysisUnavailable: boolean;
 }
+
+export const HOLDER_ANALYSIS_UNAVAILABLE_WARNING =
+  "Holder distribution could not be checked for this token.";
 
 export interface JsonRpcRequest {
   jsonrpc: "2.0";

@@ -1,7 +1,7 @@
 import {
   BASE58_REGEX,
-  RPC_ERROR_MESSAGES,
   type HolderStats,
+  RPC_ERROR_MESSAGES,
   type JsonRpcResponse,
   type MintAuthorities,
   type RpcAccountInfoResult,
@@ -157,15 +157,38 @@ export async function fetchMintAuthorities(
   return parseMintAuthorities(result.value.data[0]);
 }
 
+function unavailableHolderStats(): HolderStats {
+  return {
+    topHolderPercentage: null,
+    top10HolderPercentage: null,
+    largestAccountsReturned: 0,
+    analysisUnavailable: true,
+  };
+}
+
 /**
  * Holder concentration from the RPC largest-accounts sample only.
  * Uses getTokenLargestAccounts + getTokenSupply — never enumerates all holders.
  */
 export async function fetchHolderStats(mint: SolanaAddress): Promise<HolderStats> {
-  const [largestAccounts, supply] = await Promise.all([
-    rpcCall<RpcLargestAccountsResult>("getTokenLargestAccounts", [mint]),
-    rpcCall<RpcTokenSupplyResult>("getTokenSupply", [mint]),
-  ]);
+  let largestAccounts: RpcLargestAccountsResult;
+
+  try {
+    largestAccounts = await rpcCall<RpcLargestAccountsResult>(
+      "getTokenLargestAccounts",
+      [mint]
+    );
+  } catch {
+    return unavailableHolderStats();
+  }
+
+  let supply: RpcTokenSupplyResult;
+
+  try {
+    supply = await rpcCall<RpcTokenSupplyResult>("getTokenSupply", [mint]);
+  } catch {
+    return unavailableHolderStats();
+  }
 
   const accounts = largestAccounts?.value ?? [];
   const totalSupplyRaw = parseRawTokenAmount(supply?.value);
@@ -175,6 +198,7 @@ export async function fetchHolderStats(mint: SolanaAddress): Promise<HolderStats
       topHolderPercentage: null,
       top10HolderPercentage: null,
       largestAccountsReturned: accounts.length,
+      analysisUnavailable: false,
     };
   }
 
@@ -187,6 +211,7 @@ export async function fetchHolderStats(mint: SolanaAddress): Promise<HolderStats
       topHolderPercentage: null,
       top10HolderPercentage: null,
       largestAccountsReturned: accounts.length,
+      analysisUnavailable: false,
     };
   }
 
@@ -200,5 +225,6 @@ export async function fetchHolderStats(mint: SolanaAddress): Promise<HolderStats
     topHolderPercentage,
     top10HolderPercentage,
     largestAccountsReturned: accounts.length,
+    analysisUnavailable: false,
   };
 }

@@ -5,6 +5,7 @@ import {
 } from "./solanaRpcClient.ts";
 import {
   CATEGORY_IMAGES,
+  HOLDER_ANALYSIS_UNAVAILABLE_WARNING,
   type DexAggregated,
   type DexScreenerPair,
   type HealthCategory,
@@ -134,11 +135,17 @@ function scoreMetadata(dex: Pick<DexAggregated, "name" | "symbol" | "hasMedia">)
 
 function scoreSupplyStructure(
   topHolderPercentage: number | null,
-  top10HolderPercentage: number | null
+  top10HolderPercentage: number | null,
+  holderAnalysisUnavailable: boolean
 ) {
   const notes: string[] = [];
   let topHolderScore = 0;
   let top10Score = 0;
+
+  if (holderAnalysisUnavailable) {
+    notes.push(HOLDER_ANALYSIS_UNAVAILABLE_WARNING);
+    return { score: 10, max: 20, notes };
+  }
 
   if (topHolderPercentage == null) {
     notes.push("Holder distribution could not be calculated.");
@@ -329,6 +336,10 @@ function scoreLiquidityQuality(poolCount: number, liquidityUsd: number) {
 function buildWarnings(report: TokenHealthReport): string[] {
   const warnings: string[] = [];
 
+  if (report.holderAnalysisUnavailable) {
+    warnings.push(HOLDER_ANALYSIS_UNAVAILABLE_WARNING);
+  }
+
   if (report.topHolderPercentage != null && report.topHolderPercentage > 50) {
     warnings.push("Top holder controls more than 50% of supply.");
   }
@@ -393,7 +404,8 @@ export async function analyzeTokenHealth(mint: string): Promise<TokenHealthResul
   const metadata = scoreMetadata(dex);
   const supply = scoreSupplyStructure(
     holders.topHolderPercentage,
-    holders.top10HolderPercentage
+    holders.top10HolderPercentage,
+    holders.analysisUnavailable
   );
   const liquidity = scoreLiquidity(dex.liquidityUsd);
   const activity = scoreMarketActivity(dex.volume24h);
@@ -429,6 +441,7 @@ export async function analyzeTokenHealth(mint: string): Promise<TokenHealthResul
     volume24h: dex.volume24h,
     topHolderPercentage: holders.topHolderPercentage,
     top10HolderPercentage: holders.top10HolderPercentage,
+    holderAnalysisUnavailable: holders.analysisUnavailable,
     mintAuthorityRevoked: authorities.mintAuthorityRevoked,
     freezeAuthorityRevoked: authorities.freezeAuthorityRevoked,
     ageDays: dex.ageDays,
