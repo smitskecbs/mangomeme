@@ -1,8 +1,3 @@
-import dotenv from "dotenv";
-import { forwardSolanaRpc } from "../lib/solanaRpcProxy";
-
-dotenv.config();
-
 interface VercelRequest {
   method?: string;
 }
@@ -12,12 +7,6 @@ interface VercelResponse {
   json(body: unknown): void;
   end(): void;
 }
-
-const HEALTH_REQUEST = {
-  jsonrpc: "2.0",
-  id: 1,
-  method: "getHealth",
-} as const;
 
 export default async function handler(
   req: VercelRequest,
@@ -29,7 +18,7 @@ export default async function handler(
   }
 
   if (req.method !== "GET") {
-    res.status(405).json({ success: false, error: "Method not allowed" });
+    res.status(405).json({ error: "Method not allowed" });
     return;
   }
 
@@ -43,21 +32,37 @@ export default async function handler(
     return;
   }
 
-  const { status, payload } = await forwardSolanaRpc(HEALTH_REQUEST, rpcUrl);
+  try {
+    const rpcResponse = await fetch(rpcUrl, {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+      },
+      body: JSON.stringify({
+        jsonrpc: "2.0",
+        id: 1,
+        method: "getHealth",
+      }),
+    });
 
-  if (status === 200 && !payload.error) {
+    const text = await rpcResponse.text();
+
+    let payload: unknown;
+    try {
+      payload = JSON.parse(text);
+    } catch {
+      payload = text;
+    }
+
     res.status(200).json({
-      success: true,
+      success: rpcResponse.ok,
+      status: rpcResponse.status,
       response: payload,
     });
-    return;
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      error: error instanceof Error ? error.message : "Unknown RPC error",
+    });
   }
-
-  res.status(status >= 400 ? status : 502).json({
-    success: false,
-    error: payload.error ?? {
-      message: "RPC health check failed.",
-      status,
-    },
-  });
 }
