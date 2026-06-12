@@ -158,161 +158,272 @@
         </div>
       </section>
 
-      <section class="chapter chapter-fun" id="wallet-setup">
+      <section class="chapter chapter-fun" id="step-1-wallet">
         <div class="chapter-inner chapter-inner--fun">
-          <p class="chapter-label chapter-label--compact reveal">How to create and import a wallet</p>
+          <p class="chapter-label chapter-label--compact reveal">Step 1: Create a Wallet</p>
           <p class="fun-intro reveal">
-            Start here if you are new to Solana. This flow is meant for learning and small
-            fun tokens — not for storing large amounts of money.
+            Your wallet is where you hold tokens. For just-for-fun projects, start small,
+            learn the basics, and never put more in than you are comfortable experimenting with.
           </p>
-          <ol class="fun-steps glass-card glass-card--compact reveal">
-            <li class="fun-step">
-              <span class="fun-step__number">1</span>
-              <div class="fun-step__body">
-                <h2 class="fun-step__title">Go to the CBS Wallet Generator</h2>
-                <p>
-                  Open
-                  <a
-                    class="fun-step__link"
-                    href="https://wallet.cbs-coin.com"
-                    target="_blank"
-                    rel="noopener noreferrer"
-                  >wallet.cbs-coin.com</a>
-                  in your browser.
-                </p>
-              </div>
-            </li>
-            <li class="fun-step">
-              <span class="fun-step__number">2</span>
-              <div class="fun-step__body">
-                <h2 class="fun-step__title">Create a new wallet</h2>
-                <p>Use the CBS Wallet Generator to create a fresh Solana wallet for your experiment.</p>
-              </div>
-            </li>
-            <li class="fun-step">
-              <span class="fun-step__number">3</span>
-              <div class="fun-step__body">
-                <h2 class="fun-step__title">Download the wallet backup file</h2>
-                <p>
-                  Save the backup to your device. It is a simple text file containing your
-                  wallet details — keep it private and somewhere safe.
-                </p>
-              </div>
-            </li>
-            <li class="fun-step">
-              <span class="fun-step__number">4</span>
-              <div class="fun-step__body">
-                <h2 class="fun-step__title">Copy the private key</h2>
-                <p>Open the downloaded file and copy the private key. You will need it for the next step.</p>
-              </div>
-            </li>
-            <li class="fun-step">
-              <span class="fun-step__number">5</span>
-              <div class="fun-step__body">
-                <h2 class="fun-step__title">Import into a Solana wallet app</h2>
-                <p>
-                  Open a wallet app and choose <strong>Import wallet</strong> or
-                  <strong>Import private key</strong>, then paste your key to access the wallet.
-                </p>
-              </div>
-            </li>
-          </ol>
 
-          <div class="fun-wallet-links reveal" aria-label="Official Solana wallet apps">
-            <a
-              class="fun-wallet-link"
-              href="https://phantom.com"
-              target="_blank"
-              rel="noopener noreferrer"
-            >
-              <span class="fun-wallet-link__name">Phantom</span>
-              <span class="fun-wallet-link__url">phantom.com</span>
-            </a>
-            <a
-              class="fun-wallet-link"
-              href="https://solflare.com"
-              target="_blank"
-              rel="noopener noreferrer"
-            >
-              <span class="fun-wallet-link__name">Solflare</span>
-              <span class="fun-wallet-link__url">solflare.com</span>
-            </a>
-            <a
-              class="fun-wallet-link"
-              href="https://backpack.app"
-              target="_blank"
-              rel="noopener noreferrer"
-            >
-              <span class="fun-wallet-link__name">Backpack</span>
-              <span class="fun-wallet-link__url">backpack.app</span>
-            </a>
-          </div>
+          <article class="fun-guide-block reveal">
+            <p class="fun-guide-block__badge">Option A — Recommended for beginners</p>
+            <h2 class="fun-guide-block__title">Create a wallet in a trusted app</h2>
+            <p class="fun-guide-block__lead">
+              The easiest way to start is with a well-known Solana wallet app. Download one,
+              create a new wallet, and follow the on-screen steps.
+            </p>
 
-          <aside class="fun-safety-box glass-card glass-card--compact reveal" role="note">
+            <div class="fun-wallet-links" aria-label="Official Solana wallet apps">
+              <a
+                class="fun-wallet-link"
+                href="https://phantom.com"
+                target="_blank"
+                rel="noopener noreferrer"
+              >
+                <span class="fun-wallet-link__name">Phantom</span>
+                <span class="fun-wallet-link__url">phantom.com</span>
+              </a>
+              <a
+                class="fun-wallet-link"
+                href="https://solflare.com"
+                target="_blank"
+                rel="noopener noreferrer"
+              >
+                <span class="fun-wallet-link__name">Solflare</span>
+                <span class="fun-wallet-link__url">solflare.com</span>
+              </a>
+              <a
+                class="fun-wallet-link"
+                href="https://backpack.app"
+                target="_blank"
+                rel="noopener noreferrer"
+              >
+                <span class="fun-wallet-link__name">Backpack</span>
+                <span class="fun-wallet-link__url">backpack.app</span>
+              </a>
+            </div>
+
+            <ul class="fun-list fun-list--guide">
+              <li>Wallets are free to create.</li>
+              <li>You will receive a recovery phrase — usually 12 or 24 words.</li>
+              <li>Write your recovery phrase down and store it somewhere safe offline.</li>
+              <li>Never share your recovery phrase with anyone. Anyone who has it can control your wallet.</li>
+            </ul>
+          </article>
+
+          <article class="fun-guide-block fun-guide-block--alt reveal">
+            <p class="fun-guide-block__badge fun-guide-block__badge--alt">Option B — For fun / vanity wallets</p>
+            <h2 class="fun-guide-block__title">Create a custom vanity address</h2>
+            <p class="fun-guide-block__lead">
+              If you want a wallet address that starts with a specific word, you can use the
+              CBS Wallet Generator at
+              <a
+                class="fun-step__link"
+                href="https://wallet.cbs-coin.com"
+                target="_blank"
+                rel="noopener noreferrer"
+              >wallet.cbs-coin.com</a>.
+            </p>
+            <p class="fun-guide-block__lead">
+              Vanity wallets let you hunt for addresses with custom prefixes — for example:
+            </p>
+            <ul class="fun-tag-list" aria-label="Example vanity prefixes">
+              <li>MANGO</li>
+              <li>CBS</li>
+              <li>FUN</li>
+            </ul>
+            <ul class="fun-list fun-list--guide">
+              <li>Vanity wallets are optional — not required to create a token.</li>
+              <li>Mostly used for fun, branding and collecting cool addresses.</li>
+              <li>Generation can take time depending on how short the prefix is.</li>
+              <li>Keep your backup file private, just like a recovery phrase.</li>
+            </ul>
+          </article>
+
+          <aside class="fun-safety-box reveal" role="note">
             <h2 class="fun-safety-box__title">Important safety</h2>
             <ul class="fun-list fun-list--safety">
-              <li>Never share your private key or seed phrase with anyone.</li>
+              <li>Never share your private key or recovery phrase with anyone.</li>
               <li>Anyone with your private key can control your wallet.</li>
-              <li>Only import your private key into wallet apps you trust.</li>
+              <li>Only import keys into wallet apps you trust.</li>
               <li>For larger amounts, use a fresh wallet or hardware wallet.</li>
             </ul>
           </aside>
         </div>
       </section>
 
-      <section class="chapter chapter-fun" id="learning-path">
+      <section class="chapter chapter-fun" id="step-2-token">
         <div class="chapter-inner chapter-inner--fun">
-          <p class="chapter-label chapter-label--compact reveal">Simple learning path</p>
-          <ol class="fun-steps glass-card glass-card--compact reveal">
-            <li class="fun-step">
-              <span class="fun-step__number">1</span>
-              <div class="fun-step__body">
-                <h2 class="fun-step__title">Create or use a Solana wallet</h2>
-                <p>
-                  Set up a wallet you control so you can receive and send tokens safely.
-                  See <a class="fun-step__link" href="#wallet-setup">How to create and import a wallet</a> above.
-                </p>
-              </div>
-            </li>
-            <li class="fun-step">
-              <span class="fun-step__number">2</span>
-              <div class="fun-step__body">
-                <h2 class="fun-step__title">Create your token</h2>
-                <p>Mint a simple token for your group, event or experiment.</p>
-              </div>
-            </li>
-            <li class="fun-step">
-              <span class="fun-step__number">3</span>
-              <div class="fun-step__body">
-                <h2 class="fun-step__title">Update metadata if needed</h2>
-                <p>Add a name, symbol or image so friends recognize what you made.</p>
-              </div>
-            </li>
-            <li class="fun-step">
-              <span class="fun-step__number">4</span>
-              <div class="fun-step__body">
-                <h2 class="fun-step__title">Send tokens to friends or community members</h2>
-                <p>Share tokens directly — no public market required.</p>
-              </div>
-            </li>
-            <li class="fun-step">
-              <span class="fun-step__number">5</span>
-              <div class="fun-step__body">
-                <h2 class="fun-step__title">Learn, test and have fun</h2>
-                <p>Try things out, ask questions and keep expectations honest.</p>
-              </div>
-            </li>
-          </ol>
+          <p class="chapter-label chapter-label--compact reveal">Step 2: Create Your Token</p>
+          <p class="fun-intro reveal">
+            Once you have a wallet, you can mint a simple token using the CBS Token Builder.
+            No coding required — just fill in the fields below with plain language names and numbers.
+          </p>
           <div class="fun-cta reveal">
             <a
               class="btn btn-copy"
-              href="https://tools.cbs-coin.com"
+              href="https://token-builder.cbs-coin.com"
               target="_blank"
               rel="noopener noreferrer"
             >
-              Explore CBS Tools
+              Open Token Builder
             </a>
           </div>
+
+          <ul class="fun-field-guide" aria-label="Token builder fields explained">
+            <li class="fun-field-guide__item reveal">
+              <h3 class="fun-field-guide__title">Token Name</h3>
+              <p class="fun-field-guide__desc">
+                This is the full public name of your token — what people see in wallets and explorers.
+              </p>
+              <p class="fun-field-guide__examples-label">Examples</p>
+              <ul class="fun-tag-list fun-tag-list--inline">
+                <li>Fun Coin</li>
+                <li>Poker Chip</li>
+                <li>Football Pool Token</li>
+                <li>Friends Club</li>
+              </ul>
+            </li>
+            <li class="fun-field-guide__item reveal">
+              <h3 class="fun-field-guide__title">Symbol</h3>
+              <p class="fun-field-guide__desc">
+                A short ticker shown next to your token in wallets and on block explorers.
+                Keep it brief — usually 3 to 6 characters.
+              </p>
+              <p class="fun-field-guide__examples-label">Examples</p>
+              <ul class="fun-tag-list fun-tag-list--inline">
+                <li>FUN</li>
+                <li>POKER</li>
+                <li>GOAL</li>
+                <li>FRIEND</li>
+              </ul>
+            </li>
+            <li class="fun-field-guide__item reveal">
+              <h3 class="fun-field-guide__title">Decimals</h3>
+              <p class="fun-field-guide__desc">
+                Decimals determine how divisible your token is — how small a piece someone can hold.
+              </p>
+              <ul class="fun-list fun-list--guide">
+                <li><strong>0</strong> = whole numbers only (like counting points)</li>
+                <li><strong>9</strong> = standard Solana token format (most flexible)</li>
+              </ul>
+              <p class="fun-field-guide__tip">
+                Recommendation: use <strong>9 decimals</strong> for most tokens.
+              </p>
+            </li>
+            <li class="fun-field-guide__item reveal">
+              <h3 class="fun-field-guide__title">Initial Supply</h3>
+              <p class="fun-field-guide__desc">
+                The total number of tokens created at the start. You can always send them to
+                friends later — this is just how many exist on day one.
+              </p>
+              <p class="fun-field-guide__examples-label">Examples</p>
+              <ul class="fun-tag-list fun-tag-list--inline">
+                <li>1000</li>
+                <li>100000</li>
+                <li>1000000</li>
+              </ul>
+            </li>
+          </ul>
+        </div>
+      </section>
+
+      <section class="chapter chapter-fun" id="logo-tips">
+        <div class="chapter-inner chapter-inner--fun">
+          <p class="chapter-label chapter-label--compact reveal">Token Logo Tips</p>
+          <p class="fun-intro reveal">
+            A clear logo helps your token look polished in wallets and explorers. It is optional,
+            but worth a few minutes if you want friends to recognize it instantly.
+          </p>
+          <div class="fun-dos-donts reveal">
+            <div class="fun-dos-donts__col">
+              <h2 class="fun-dos-donts__heading fun-dos-donts__heading--do">Recommended</h2>
+              <ul class="fun-list fun-list--guide">
+                <li>PNG format</li>
+                <li>Square image</li>
+                <li>512×512 pixels</li>
+                <li>Transparent background preferred</li>
+              </ul>
+            </div>
+            <div class="fun-dos-donts__col">
+              <h2 class="fun-dos-donts__heading fun-dos-donts__heading--dont">Avoid</h2>
+              <ul class="fun-list fun-list--guide">
+                <li>Blurry images</li>
+                <li>Screenshots</li>
+                <li>Small images</li>
+                <li>Stretched images</li>
+              </ul>
+            </div>
+          </div>
+          <p class="fun-note reveal">
+            A good logo improves how your token appears in wallets and explorers — especially
+            when you share it with friends who have never seen it before.
+          </p>
+        </div>
+      </section>
+
+      <section class="chapter chapter-fun" id="metadata-guide">
+        <div class="chapter-inner chapter-inner--fun">
+          <p class="chapter-label chapter-label--compact reveal">Metadata Guide</p>
+          <div class="prose prose-fun reveal">
+            <p>
+              <strong>Metadata</strong> is the public information attached to your token.
+              Think of it as the label on the outside of the box — it tells people what they
+              are looking at before they interact with it.
+            </p>
+            <p>Metadata typically includes:</p>
+          </div>
+          <ul class="fun-list fun-list--guide fun-list--centered reveal">
+            <li>Token name</li>
+            <li>Symbol</li>
+            <li>Description</li>
+            <li>Logo</li>
+          </ul>
+          <p class="fun-note reveal">
+            You can create a token first and add or update metadata later using metadata tools
+            on CBS — no need to get everything perfect on the first try.
+          </p>
+        </div>
+      </section>
+
+      <section class="chapter chapter-fun" id="fun-examples">
+        <div class="chapter-inner chapter-inner--fun">
+          <p class="chapter-label chapter-label--compact reveal">Just For Fun Examples</p>
+          <p class="fun-intro reveal">
+            Here are a few realistic ways people use simple tokens — no liquidity, no roadmap,
+            just something useful or fun for a small group.
+          </p>
+          <ul class="fun-timeline" aria-label="Realistic token examples">
+            <li class="fun-timeline__item reveal">
+              <h3 class="fun-timeline__title">Football Pool Token</h3>
+              <p class="fun-timeline__desc">
+                Create 1000 tokens and give participants tokens based on match predictions.
+                Winners collect points over the season — no real money needed.
+              </p>
+            </li>
+            <li class="fun-timeline__item reveal">
+              <h3 class="fun-timeline__title">Poker Night Token</h3>
+              <p class="fun-timeline__desc">
+                Use tokens as chips for a friendly poker night. Everyone starts with the same
+                amount and trades tokens during the game instead of cash.
+              </p>
+            </li>
+            <li class="fun-timeline__item reveal">
+              <h3 class="fun-timeline__title">Friends Club Token</h3>
+              <p class="fun-timeline__desc">
+                Reward friends with points for events, inside jokes, or weekly challenges.
+                A light way to keep score in a private group chat.
+              </p>
+            </li>
+            <li class="fun-timeline__item reveal">
+              <h3 class="fun-timeline__title">Learning Token</h3>
+              <p class="fun-timeline__desc">
+                Create your first token simply to learn how Solana works — mint it, send a few
+                to yourself, and explore without any pressure to launch a project.
+              </p>
+            </li>
+          </ul>
         </div>
       </section>
 
@@ -331,25 +442,32 @@
 
       <section class="chapter chapter-fun chapter-fun--closing" id="build-more">
         <div class="chapter-inner chapter-inner--fun">
-          <p class="chapter-label chapter-label--compact reveal">Ready to build something more serious?</p>
-          <div class="glass-card glass-card--featured reveal">
-            <div class="prose prose-fun">
-              <p>
-                If a fun token grows into a real project later, builders can explore more
-                advanced tools like <strong>Token Launcher</strong>, <strong>Token Locker</strong>
-                and <strong>LP Locker</strong> when they are ready.
-              </p>
-            </div>
-            <div class="fun-cta fun-cta--inline">
-              <a
-                class="btn btn-copy"
-                href="https://tools.cbs-coin.com"
-                target="_blank"
-                rel="noopener noreferrer"
-              >
-                Start with the tools
-              </a>
-            </div>
+          <p class="chapter-label chapter-label--compact reveal">Ready for something bigger?</p>
+          <div class="prose prose-fun reveal">
+            <p>
+              If your fun token grows into a serious project later, you can explore more
+              advanced tools when you are ready — without needing them from day one.
+            </p>
+            <p>When the time comes, builders often look at:</p>
+          </div>
+          <ul class="fun-list fun-list--guide fun-list--centered reveal">
+            <li>Token Launcher</li>
+            <li>Token Locker</li>
+            <li>LP Locker</li>
+          </ul>
+          <p class="fun-note reveal">
+            There is no rush. Learn with a small fun token first, understand how everything
+            works, and only move forward when it makes sense for your project.
+          </p>
+          <div class="fun-cta reveal">
+            <a
+              class="btn btn-solscan"
+              href="https://tools.cbs-coin.com"
+              target="_blank"
+              rel="noopener noreferrer"
+            >
+              Explore CBS Tools when ready
+            </a>
           </div>
         </div>
       </section>
