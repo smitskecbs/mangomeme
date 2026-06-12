@@ -1,0 +1,249 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta
+      name="description"
+      content="Just For Fun Tokens — a beginner-friendly guide to creating simple Solana tokens for learning, friends, and community fun."
+    />
+    <title>Just For Fun Tokens · ManGo</title>
+    <link rel="icon" type="image/png" href="/src/assets/logo.png" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Fredoka:wght@500;600;700&family=Nunito:wght@400;600;700&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="/styles.css" />
+  </head>
+  <body>
+    <div class="sky-birds" id="sky-birds" aria-hidden="true"></div>
+    <div class="sky-clouds" id="sky-clouds" aria-hidden="true"></div>
+    <div class="sky-particles" id="sky-particles" aria-hidden="true"></div>
+    <div class="hero-sun-glow" aria-hidden="true"></div>
+    <div class="ocean-atmosphere" aria-hidden="true"></div>
+
+    <header class="site-nav">
+      <button
+        class="hamburger"
+        id="menu-toggle"
+        type="button"
+        aria-expanded="false"
+        aria-controls="nav-menu"
+        aria-label="Open menu"
+      >
+        <span class="hamburger__bar"></span>
+        <span class="hamburger__bar"></span>
+        <span class="hamburger__bar"></span>
+      </button>
+
+      <nav class="nav-menu" id="nav-menu" aria-label="Main navigation">
+        <a href="/">Home</a>
+        <a href="/#about">About</a>
+        <a href="/#token">Mint</a>
+        <a href="/#checker">Checker</a>
+        <a href="/just-for-fun.html" aria-current="page">Just For Fun</a>
+        <a
+          href="https://explorer.solana.com/address/29KN57rM6tV2aWdo1agZcF6ynPXB1dhHdKHNrrAmaNGo"
+          target="_blank"
+          rel="noopener noreferrer"
+        >
+          Explorer
+        </a>
+      </nav>
+    </header>
+
+    <div class="nav-overlay" id="nav-overlay" aria-hidden="true"></div>
+
+    <section class="page-hero page-hero--fun" id="top">
+      <div class="container page-hero-inner">
+        <p class="page-hero__eyebrow">
+          <a href="/">ManGo</a> · Learning guide
+        </p>
+        <h1 class="page-hero__title">Just For Fun Tokens 🥭</h1>
+        <p class="page-hero__subtitle">
+          Not every token needs to become the next big project. Sometimes a token is
+          just a fun way to learn, play and build with friends.
+        </p>
+      </div>
+    </section>
+
+    <main class="journey journey--fun">
+      <section class="chapter chapter-fun" id="what-is">
+        <div class="chapter-inner chapter-inner--fun">
+          <p class="chapter-label chapter-label--compact reveal">What is a Just For Fun Token?</p>
+          <div class="glass-card glass-card--featured reveal">
+            <span class="glass-card__reflection" aria-hidden="true"></span>
+            <div class="prose prose-fun">
+              <p>
+                A <strong>Just For Fun Token</strong> is a token made for experimenting,
+                learning or small private communities. It can be used without creating a
+                full crypto project, without liquidity and without promises.
+              </p>
+              <p>
+                Think of it as play money, community points or a shared inside joke —
+                not an investment pitch.
+              </p>
+            </div>
+          </div>
+
+          <ul class="fun-example-grid reveal" aria-label="Example uses">
+            <li class="fun-example-card">
+              <span class="fun-example-card__icon" aria-hidden="true">👥</span>
+              <span class="fun-example-card__title">Friends group token</span>
+            </li>
+            <li class="fun-example-card">
+              <span class="fun-example-card__icon" aria-hidden="true">🃏</span>
+              <span class="fun-example-card__title">Poker night token</span>
+            </li>
+            <li class="fun-example-card">
+              <span class="fun-example-card__icon" aria-hidden="true">⚽</span>
+              <span class="fun-example-card__title">Football pool token</span>
+            </li>
+            <li class="fun-example-card">
+              <span class="fun-example-card__icon" aria-hidden="true">📚</span>
+              <span class="fun-example-card__title">School or learning project</span>
+            </li>
+            <li class="fun-example-card">
+              <span class="fun-example-card__icon" aria-hidden="true">⭐</span>
+              <span class="fun-example-card__title">Community points</span>
+            </li>
+            <li class="fun-example-card">
+              <span class="fun-example-card__icon" aria-hidden="true">🎮</span>
+              <span class="fun-example-card__title">Game or challenge token</span>
+            </li>
+          </ul>
+        </div>
+      </section>
+
+      <section class="chapter chapter-fun" id="liquidity">
+        <div class="chapter-inner chapter-inner--fun-wide">
+          <p class="chapter-label chapter-label--compact reveal">Do you need liquidity?</p>
+          <div class="fun-two-col reveal">
+            <article class="glass-card glass-card--compact fun-liquidity-card">
+              <h2 class="fun-liquidity-card__title">You probably DON'T need liquidity if:</h2>
+              <ul class="fun-list">
+                <li>The token is only for friends</li>
+                <li>You are learning how tokens work</li>
+                <li>It is used as play money</li>
+                <li>It is used for a football pool or poker night</li>
+                <li>It is not meant for public trading</li>
+                <li>You are not promising profit or investment value</li>
+              </ul>
+            </article>
+            <article class="glass-card glass-card--compact fun-liquidity-card fun-liquidity-card--may">
+              <h2 class="fun-liquidity-card__title">You MAY need liquidity if:</h2>
+              <ul class="fun-list">
+                <li>You want people to trade the token publicly</li>
+                <li>You want price discovery</li>
+                <li>You want outside investors or buyers</li>
+                <li>You are building a real project around the token</li>
+                <li>You understand the risks and responsibilities</li>
+              </ul>
+            </article>
+          </div>
+        </div>
+      </section>
+
+      <section class="chapter chapter-fun" id="learning-path">
+        <div class="chapter-inner chapter-inner--fun">
+          <p class="chapter-label chapter-label--compact reveal">Simple learning path</p>
+          <ol class="fun-steps glass-card glass-card--compact reveal">
+            <li class="fun-step">
+              <span class="fun-step__number">1</span>
+              <div class="fun-step__body">
+                <h2 class="fun-step__title">Create or use a Solana wallet</h2>
+                <p>Set up a wallet you control so you can receive and send tokens safely.</p>
+              </div>
+            </li>
+            <li class="fun-step">
+              <span class="fun-step__number">2</span>
+              <div class="fun-step__body">
+                <h2 class="fun-step__title">Create your token</h2>
+                <p>Mint a simple token for your group, event or experiment.</p>
+              </div>
+            </li>
+            <li class="fun-step">
+              <span class="fun-step__number">3</span>
+              <div class="fun-step__body">
+                <h2 class="fun-step__title">Update metadata if needed</h2>
+                <p>Add a name, symbol or image so friends recognize what you made.</p>
+              </div>
+            </li>
+            <li class="fun-step">
+              <span class="fun-step__number">4</span>
+              <div class="fun-step__body">
+                <h2 class="fun-step__title">Send tokens to friends or community members</h2>
+                <p>Share tokens directly — no public market required.</p>
+              </div>
+            </li>
+            <li class="fun-step">
+              <span class="fun-step__number">5</span>
+              <div class="fun-step__body">
+                <h2 class="fun-step__title">Learn, test and have fun</h2>
+                <p>Try things out, ask questions and keep expectations honest.</p>
+              </div>
+            </li>
+          </ol>
+          <div class="fun-cta reveal">
+            <a
+              class="btn btn-copy"
+              href="https://tools.cbs-coin.com"
+              target="_blank"
+              rel="noopener noreferrer"
+            >
+              Explore CBS Tools
+            </a>
+          </div>
+        </div>
+      </section>
+
+      <section class="chapter chapter-fun" id="reminder">
+        <div class="chapter-inner chapter-inner--fun">
+          <p class="chapter-label chapter-label--minimal reveal">Important reminder</p>
+          <aside class="fun-reminder glass-card glass-card--compact reveal" role="note">
+            <p>
+              Just For Fun Tokens are <strong>not financial advice</strong>, not investment
+              products and should not be promoted with profit promises. Keep it simple,
+              honest and transparent.
+            </p>
+          </aside>
+        </div>
+      </section>
+
+      <section class="chapter chapter-fun chapter-fun--closing" id="build-more">
+        <div class="chapter-inner chapter-inner--fun">
+          <p class="chapter-label chapter-label--compact reveal">Ready to build something more serious?</p>
+          <div class="glass-card glass-card--featured reveal">
+            <div class="prose prose-fun">
+              <p>
+                If a fun token grows into a real project later, builders can explore more
+                advanced tools like <strong>Token Launcher</strong>, <strong>Token Locker</strong>
+                and <strong>LP Locker</strong> when they are ready.
+              </p>
+            </div>
+            <div class="fun-cta fun-cta--inline">
+              <a
+                class="btn btn-copy"
+                href="https://tools.cbs-coin.com"
+                target="_blank"
+                rel="noopener noreferrer"
+              >
+                Start with the tools
+              </a>
+            </div>
+          </div>
+        </div>
+      </section>
+    </main>
+
+    <footer class="footer">
+      <div class="container">
+        <p>ManGo · $MNGO · Solana</p>
+      </div>
+    </footer>
+
+    <script type="module" src="/script.js"></script>
+  </body>
+</html>

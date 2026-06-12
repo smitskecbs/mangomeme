@@ -1,5 +1,6 @@
 import type { Connect } from "vite";
 import { defineConfig, loadEnv } from "vite";
+import { resolve } from "node:path";
 import { createSolanaRpcMiddleware } from "./lib/solanaRpcProxy";
 
 function attachSolanaRpcProxy(
@@ -17,6 +18,12 @@ export default defineConfig(({ mode }) => {
   return {
     build: {
       outDir: "dist",
+      rollupOptions: {
+        input: {
+          main: resolve(__dirname, "index.html"),
+          justForFun: resolve(__dirname, "just-for-fun.html"),
+        },
+      },
     },
     plugins: [
       {
