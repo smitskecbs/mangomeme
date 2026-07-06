@@ -2,6 +2,7 @@
   "buildCommand": "npm run build",
   "outputDirectory": "dist",
   "rewrites": [
-    { "source": "/just-for-fun", "destination": "/just-for-fun.html" }
+    { "source": "/just-for-fun", "destination": "/just-for-fun.html" },
+    { "source": "/mango-labs", "destination": "/mango-labs.html" }
   ]
 }

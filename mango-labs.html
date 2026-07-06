@@ -1,0 +1,157 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta
+      name="description"
+      content="ManGo Labs — experiments and mini games from the ManGo community."
+    />
+    <title>ManGo Labs · ManGo Snake</title>
+    <link rel="icon" type="image/png" href="/src/assets/logo.png" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Fredoka:wght@500;600;700&family=Nunito:wght@400;600;700&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="/styles.css" />
+  </head>
+  <body>
+    <div class="sky-birds" id="sky-birds" aria-hidden="true"></div>
+    <div class="sky-clouds" id="sky-clouds" aria-hidden="true"></div>
+    <div class="sky-particles" id="sky-particles" aria-hidden="true"></div>
+    <div class="hero-sun-glow" aria-hidden="true"></div>
+    <div class="ocean-atmosphere" aria-hidden="true"></div>
+
+    <header class="site-nav">
+      <button
+        class="hamburger"
+        id="menu-toggle"
+        type="button"
+        aria-expanded="false"
+        aria-controls="nav-menu"
+        aria-label="Open menu"
+      >
+        <span class="hamburger__bar"></span>
+        <span class="hamburger__bar"></span>
+        <span class="hamburger__bar"></span>
+      </button>
+
+      <nav class="nav-menu" id="nav-menu" aria-label="Main navigation">
+        <a href="/">Home</a>
+        <a href="/#about">About</a>
+        <a href="/#token">Mint</a>
+        <a href="/#checker">Checker</a>
+        <a href="/just-for-fun.html">Just For Fun</a>
+        <a href="/mango-labs.html" aria-current="page">ManGo Labs</a>
+        <a
+          href="https://explorer.solana.com/address/29KN57rM6tV2aWdo1agZcF6ynPXB1dhHdKHNrrAmaNGo"
+          target="_blank"
+          rel="noopener noreferrer"
+        >
+          Explorer
+        </a>
+      </nav>
+    </header>
+
+    <div class="nav-overlay" id="nav-overlay" aria-hidden="true"></div>
+
+    <section class="page-hero page-hero--fun" id="top">
+      <div class="container page-hero-inner">
+        <p class="page-hero__eyebrow">
+          <a href="/">ManGo</a> · Labs
+        </p>
+        <h1 class="page-hero__title">ManGo Labs</h1>
+        <p class="page-hero__subtitle">
+          Every week we're building and testing something new. This week: guide
+          the ManGo snake, eat mangos, and beat your high score.
+        </p>
+      </div>
+    </section>
+
+    <main class="journey journey--fun">
+      <section class="chapter chapter-labs" id="mango-snake">
+        <div class="chapter-inner chapter-inner--labs">
+          <p class="chapter-label chapter-label--compact reveal">🥭 ManGo Snake</p>
+          <div class="glass-card glass-card--featured labs-game-card reveal">
+            <span class="glass-card__reflection" aria-hidden="true"></span>
+            <p class="labs-game-card__intro">
+              Use <strong>arrow keys</strong> or <strong>WASD</strong> on desktop.
+              On mobile, tap the direction pad below the board.
+            </p>
+
+            <div class="labs-game-wrap" id="ms-arena">
+              <canvas
+                id="ms-canvas"
+                class="labs-game-canvas"
+                aria-label="ManGo Snake game board"
+                role="img"
+              ></canvas>
+            </div>
+
+            <div class="labs-snake-dpad" aria-label="Direction controls">
+              <button type="button" class="labs-dpad-btn labs-dpad-btn--up" id="ms-up" aria-label="Up">
+                ▲
+              </button>
+              <button type="button" class="labs-dpad-btn labs-dpad-btn--left" id="ms-left" aria-label="Left">
+                ◀
+              </button>
+              <button type="button" class="labs-dpad-btn labs-dpad-btn--down" id="ms-down" aria-label="Down">
+                ▼
+              </button>
+              <button type="button" class="labs-dpad-btn labs-dpad-btn--right" id="ms-right" aria-label="Right">
+                ▶
+              </button>
+            </div>
+
+            <div class="labs-game-hud">
+              <p>Score: <strong id="ms-score">0</strong></p>
+              <p>High score: <strong id="ms-high-score">0</strong></p>
+            </div>
+
+            <p class="labs-game-message" id="ms-message" role="status" aria-live="polite">
+              Press Start to begin.
+            </p>
+
+            <div class="labs-highscore-share" id="ms-highscore-share" hidden>
+              <p class="labs-highscore-share__title">New high score!</p>
+              <p class="labs-highscore-share__text">
+                Optional: add a display name to share your score with the ManGo community.
+              </p>
+              <label class="labs-highscore-share__label" for="ms-player-name">Display name</label>
+              <input
+                class="labs-highscore-share__input"
+                id="ms-player-name"
+                type="text"
+                maxlength="24"
+                placeholder="ManGo Player"
+                autocomplete="nickname"
+              />
+              <div class="labs-highscore-share__actions">
+                <button class="btn btn-copy" id="ms-submit-score" type="button">Share score</button>
+                <button class="btn btn-solscan" id="ms-skip-score" type="button">Skip</button>
+              </div>
+            </div>
+
+            <div class="labs-game-actions">
+              <button class="btn btn-copy" id="ms-start" type="button">Start game</button>
+              <button class="btn btn-solscan" id="ms-restart" type="button" hidden>
+                Play again
+              </button>
+            </div>
+          </div>
+        </div>
+      </section>
+    </main>
+
+    <footer class="footer">
+      <div class="container">
+        <p>ManGo · $MNGO · Solana · Labs</p>
+      </div>
+    </footer>
+
+    <script type="module" src="/script.js"></script>
+    <script type="module" src="/src/labs.ts"></script>
+  </body>
+</html>
