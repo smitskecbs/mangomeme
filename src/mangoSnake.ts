@@ -11,6 +11,9 @@ const CONFIG = {
   foodPopMs: 360,
   wallHitMs: 200,
   gameOverShakeMs: 200,
+  bonusEvery: 5,
+  bonusPoints: 50,
+  bonusLifetimeMs: 4000,
   storageKey: "mango-snake-high-score",
   playerNameKey: "mango-snake-player-name",
   bodyRadiusRatio: 0.36,
@@ -24,6 +27,7 @@ const CONFIG = {
     snakeHeadGlow: "rgba(94, 217, 160, 0.35)",
     mangoGlow: "rgba(255, 179, 71, 0.5)",
     mangoGlowSoft: "rgba(255, 214, 102, 0.22)",
+    bonusGlow: "rgba(255, 214, 102, 0.65)",
     idleOverlay: "rgba(6, 42, 58, 0.22)",
   },
 } as const;
@@ -35,6 +39,12 @@ type Direction = "up" | "down" | "left" | "right";
 interface Point {
   x: number;
   y: number;
+}
+
+interface BonusMango {
+  x: number;
+  y: number;
+  spawnedAt: number;
 }
 
 const OPPOSITE: Record<Direction, Direction> = {
@@ -51,7 +61,9 @@ export function initMangoSnake(): void {
   const msgNode = document.getElementById("ms-message");
   const restartNode = document.getElementById("ms-restart") as HTMLButtonElement | null;
   const startBtn = document.getElementById("ms-start") as HTMLButtonElement | null;
-  const sharePanel = document.getElementById("ms-highscore-share");
+  const gameModal = document.getElementById("ms-game-modal");
+  const shareModal = document.getElementById("ms-share-modal");
+  const closeGameBtn = document.getElementById("ms-close-game") as HTMLButtonElement | null;
   const shareScoreNode = document.getElementById("ms-share-score");
   const shareStatusNode = document.getElementById("ms-share-status");
   const playerNameInput = document.getElementById("ms-player-name") as HTMLInputElement | null;
@@ -76,7 +88,9 @@ export function initMangoSnake(): void {
     msgNode,
     restartNode,
     startBtn,
-    sharePanel,
+    gameModal,
+    shareModal,
+    closeGameBtn,
     shareScoreNode,
     shareStatusNode,
     playerNameInput,
@@ -97,7 +111,9 @@ function runMangoSnake(
   msgNode: HTMLElement,
   restartNode: HTMLButtonElement,
   startBtn: HTMLButtonElement | null,
-  sharePanel: HTMLElement | null,
+  gameModal: HTMLElement | null,
+  shareModal: HTMLElement | null,
+  closeGameBtn: HTMLButtonElement | null,
   shareScoreNode: HTMLElement | null,
   shareStatusNode: HTMLElement | null,
   playerNameInput: HTMLInputElement | null,
@@ -114,6 +130,8 @@ function runMangoSnake(
   let nextDirection: Direction = "right";
   let food: Point = { x: 0, y: 0 };
   let foodPopStart = 0;
+  let bonusMango: BonusMango | null = null;
+  let mangoesEaten = 0;
   let score = 0;
   let highScore = loadHighScore();
   let highScoreAtGameStart = highScore;
@@ -184,25 +202,27 @@ function runMangoSnake(
     }
   }
 
-  function hideSharePanel(): void {
-    if (sharePanel) {
-      sharePanel.hidden = true;
-    }
-    pendingShareScore = 0;
-    isSubmittingScore = false;
-    if (submitScoreBtn) {
-      submitScoreBtn.disabled = false;
-    }
-    setShareStatus("");
+  function openGameModal(): void {
+    gameModal?.removeAttribute("hidden");
+    document.body.classList.add("labs-game-modal-open");
+    window.requestAnimationFrame(() => {
+      resize();
+    });
   }
 
-  function showSharePanel(newScore: number): void {
-    if (!isHighScoreSharingEnabled() || !sharePanel) {
+  function closeGameModal(): void {
+    gameModal?.setAttribute("hidden", "");
+    document.body.classList.remove("labs-game-modal-open");
+  }
+
+  function openShareModal(newScore: number): void {
+    if (!isHighScoreSharingEnabled() || !shareModal) {
       return;
     }
 
     pendingShareScore = newScore;
-    sharePanel.hidden = false;
+    shareModal.removeAttribute("hidden");
+    document.body.classList.add("labs-share-modal-open");
 
     if (shareScoreNode) {
       shareScoreNode.textContent = String(newScore);
@@ -226,9 +246,51 @@ function runMangoSnake(
     });
   }
 
+  function closeShareModal(): void {
+    shareModal?.setAttribute("hidden", "");
+    document.body.classList.remove("labs-share-modal-open");
+    pendingShareScore = 0;
+    isSubmittingScore = false;
+
+    if (submitScoreBtn) {
+      submitScoreBtn.disabled = false;
+    }
+
+    if (skipScoreBtn) {
+      skipScoreBtn.disabled = false;
+    }
+
+    setShareStatus("");
+  }
+
   function updateHud(): void {
     scoreNode.textContent = String(score);
     highNode.textContent = String(highScore);
+  }
+
+  function occupiedCells(): Set<string> {
+    const occupied = new Set(snake.map((segment) => `${segment.x},${segment.y}`));
+    occupied.add(`${food.x},${food.y}`);
+
+    if (bonusMango) {
+      occupied.add(`${bonusMango.x},${bonusMango.y}`);
+    }
+
+    return occupied;
+  }
+
+  function spawnAtRandomFreeCell(): Point {
+    const occupied = occupiedCells();
+    let candidate: Point;
+
+    do {
+      candidate = {
+        x: Math.floor(Math.random() * gridCols),
+        y: Math.floor(Math.random() * gridRows),
+      };
+    } while (occupied.has(`${candidate.x},${candidate.y}`));
+
+    return candidate;
   }
 
   function resetSnake(): void {
@@ -243,14 +305,21 @@ function runMangoSnake(
     direction = "right";
     nextDirection = "right";
     score = 0;
+    mangoesEaten = 0;
+    bonusMango = null;
     spawnFood();
     updateHud();
   }
 
   function spawnFood(): void {
-    const occupied = new Set(snake.map((segment) => `${segment.x},${segment.y}`));
-    let candidate: Point;
+    food = spawnAtRandomFreeCell();
+    foodPopStart = performance.now();
+  }
 
+  function spawnBonusMango(): void {
+    const occupied = occupiedCells();
+
+    let candidate: Point;
     do {
       candidate = {
         x: Math.floor(Math.random() * gridCols),
@@ -258,8 +327,21 @@ function runMangoSnake(
       };
     } while (occupied.has(`${candidate.x},${candidate.y}`));
 
-    food = candidate;
-    foodPopStart = performance.now();
+    bonusMango = {
+      x: candidate.x,
+      y: candidate.y,
+      spawnedAt: performance.now(),
+    };
+  }
+
+  function clearExpiredBonus(now: number): void {
+    if (!bonusMango) {
+      return;
+    }
+
+    if (now - bonusMango.spawnedAt >= CONFIG.bonusLifetimeMs) {
+      bonusMango = null;
+    }
   }
 
   function isOutOfBounds(point: Point): boolean {
@@ -276,17 +358,15 @@ function runMangoSnake(
       endTimeoutId = 0;
     }
 
+    closeShareModal();
     clearArenaEffects();
-    hideSharePanel();
+    openGameModal();
     highScoreAtGameStart = highScore;
     resetSnake();
     state = "playing";
     lastTick = 0;
     msgNode.textContent = "Eat mangos. Stay inside the border!";
     restartNode.hidden = true;
-    if (startBtn) {
-      startBtn.hidden = true;
-    }
   }
 
   function finalizeGameOver(message: string): void {
@@ -299,13 +379,13 @@ function runMangoSnake(
       saveHighScore(highScore);
     }
 
-    if (isNewPersonalBest) {
-      showSharePanel(score);
-    }
-
     msgNode.textContent = message;
     restartNode.hidden = false;
     updateHud();
+
+    if (isNewPersonalBest) {
+      openShareModal(score);
+    }
   }
 
   async function sharePendingScore(): Promise<void> {
@@ -360,7 +440,7 @@ function runMangoSnake(
       return false;
     }
 
-    return Boolean(target.closest("#ms-highscore-share"));
+    return Boolean(target.closest("#ms-share-modal"));
   }
 
   function triggerGameOver(message: string, reason: DeathReason): void {
@@ -463,7 +543,8 @@ function runMangoSnake(
     }
   }
 
-  function step(): void {
+  function step(now: number): void {
+    clearExpiredBonus(now);
     direction = nextDirection;
 
     const head = snake[0];
@@ -491,8 +572,11 @@ function runMangoSnake(
       return;
     }
 
-    const willEat = nextHead.x === food.x && nextHead.y === food.y;
-    const bodyToCheck = willEat ? snake : snake.slice(0, -1);
+    const willEatFood = nextHead.x === food.x && nextHead.y === food.y;
+    const willEatBonus =
+      bonusMango !== null && nextHead.x === bonusMango.x && nextHead.y === bonusMango.y;
+    const willGrow = willEatFood || willEatBonus;
+    const bodyToCheck = willGrow ? snake : snake.slice(0, -1);
 
     if (bodyToCheck.some((segment) => segment.x === nextHead.x && segment.y === nextHead.y)) {
       triggerGameOver("Game over — you bit yourself!", "self");
@@ -501,17 +585,28 @@ function runMangoSnake(
 
     snake.unshift(nextHead);
 
-    if (willEat) {
+    if (willEatFood) {
       score += CONFIG.pointsPerMango;
-      if (score > highScore) {
-        highScore = score;
-        saveHighScore(highScore);
+      mangoesEaten += 1;
+
+      if (mangoesEaten % CONFIG.bonusEvery === 0) {
+        spawnBonusMango();
       }
+
       spawnFood();
-      updateHud();
+    } else if (willEatBonus) {
+      score += CONFIG.bonusPoints;
+      bonusMango = null;
     } else {
       snake.pop();
     }
+
+    if (score > highScore) {
+      highScore = score;
+      saveHighScore(highScore);
+    }
+
+    updateHud();
   }
 
   function segmentCenter(segment: Point): { cx: number; cy: number } {
@@ -531,6 +626,79 @@ function runMangoSnake(
 
   function drawBackground(): void {
     gfx.clearRect(0, 0, width, height);
+  }
+
+  function drawMangoEmoji(
+    cx: number,
+    cy: number,
+    cell: number,
+    scale: number,
+    alpha: number,
+    glowColor: string,
+    glowScale: number
+  ): void {
+    const fontSize = Math.floor(cell * 0.82 * scale);
+    const glowR = cell * glowScale;
+
+    const glow = gfx.createRadialGradient(cx, cy, glowR * 0.1, cx, cy, glowR);
+    glow.addColorStop(0, glowColor);
+    glow.addColorStop(0.55, CONFIG.colors.mangoGlowSoft);
+    glow.addColorStop(1, "rgba(255, 179, 71, 0)");
+    gfx.fillStyle = glow;
+    gfx.beginPath();
+    gfx.arc(cx, cy, glowR, 0, Math.PI * 2);
+    gfx.fill();
+
+    gfx.save();
+    gfx.globalAlpha = alpha;
+    gfx.translate(cx, cy);
+    gfx.font = `${fontSize}px serif`;
+    gfx.textAlign = "center";
+    gfx.textBaseline = "middle";
+    gfx.fillText("🥭", 0, 1);
+    gfx.restore();
+
+    gfx.textAlign = "left";
+    gfx.textBaseline = "alphabetic";
+    gfx.globalAlpha = 1;
+  }
+
+  function drawFood(now: number): void {
+    const cx = (food.x + 0.5) * cellW;
+    const cy = (food.y + 0.5) * cellH;
+    const elapsed = now - foodPopStart;
+    const t = Math.min(1, elapsed / CONFIG.foodPopMs);
+    const ease = 1 - (1 - t) ** 3;
+    const scale = 0.35 + ease * 0.65;
+    const alpha = 0.55 + ease * 0.45;
+    const cell = Math.min(cellW, cellH);
+
+    if (t < 1) {
+      const ringR = cell * (0.3 + ease * 0.5);
+      gfx.strokeStyle = CONFIG.colors.mangoGlow;
+      gfx.lineWidth = 2.5 * (1 - t);
+      gfx.beginPath();
+      gfx.arc(cx, cy, ringR, 0, Math.PI * 2);
+      gfx.stroke();
+    }
+
+    drawMangoEmoji(cx, cy, cell, scale, alpha, CONFIG.colors.mangoGlow, 0.55 + ease * 0.15);
+  }
+
+  function drawBonusMango(now: number): void {
+    if (!bonusMango) {
+      return;
+    }
+
+    const cx = (bonusMango.x + 0.5) * cellW;
+    const cy = (bonusMango.y + 0.5) * cellH;
+    const cell = Math.min(cellW, cellH);
+    const elapsed = now - bonusMango.spawnedAt;
+    const lifeT = Math.min(1, elapsed / CONFIG.bonusLifetimeMs);
+    const pulse = 1 + Math.sin(elapsed / 120) * 0.08;
+    const alpha = 0.75 + (1 - lifeT) * 0.2;
+
+    drawMangoEmoji(cx, cy, cell, 1.35 * pulse, alpha, CONFIG.colors.bonusGlow, 0.85);
   }
 
   function drawSnake(): void {
@@ -643,51 +811,6 @@ function runMangoSnake(
     gfx.fill();
   }
 
-  function drawFood(now: number): void {
-    const cx = (food.x + 0.5) * cellW;
-    const cy = (food.y + 0.5) * cellH;
-    const elapsed = now - foodPopStart;
-    const t = Math.min(1, elapsed / CONFIG.foodPopMs);
-    const ease = 1 - (1 - t) ** 3;
-    const scale = 0.35 + ease * 0.65;
-    const alpha = 0.55 + ease * 0.45;
-    const cell = Math.min(cellW, cellH);
-    const fontSize = Math.floor(cell * 0.82);
-    const glowR = cell * (0.55 + ease * 0.15);
-
-    const glow = gfx.createRadialGradient(cx, cy, glowR * 0.1, cx, cy, glowR);
-    glow.addColorStop(0, CONFIG.colors.mangoGlow);
-    glow.addColorStop(0.55, CONFIG.colors.mangoGlowSoft);
-    glow.addColorStop(1, "rgba(255, 179, 71, 0)");
-    gfx.fillStyle = glow;
-    gfx.beginPath();
-    gfx.arc(cx, cy, glowR, 0, Math.PI * 2);
-    gfx.fill();
-
-    if (t < 1) {
-      const ringR = cell * (0.3 + ease * 0.5);
-      gfx.strokeStyle = CONFIG.colors.mangoGlow;
-      gfx.lineWidth = 2.5 * (1 - t);
-      gfx.beginPath();
-      gfx.arc(cx, cy, ringR, 0, Math.PI * 2);
-      gfx.stroke();
-    }
-
-    gfx.save();
-    gfx.globalAlpha = alpha;
-    gfx.translate(cx, cy);
-    gfx.scale(scale, scale);
-    gfx.font = `${fontSize}px serif`;
-    gfx.textAlign = "center";
-    gfx.textBaseline = "middle";
-    gfx.fillText("🥭", 0, 1);
-    gfx.restore();
-
-    gfx.textAlign = "left";
-    gfx.textBaseline = "alphabetic";
-    gfx.globalAlpha = 1;
-  }
-
   function drawOverlay(): void {
     if (state !== "idle") {
       return;
@@ -706,6 +829,7 @@ function runMangoSnake(
   function draw(now: number): void {
     drawBackground();
     drawFood(now);
+    drawBonusMango(now);
     drawSnake();
     drawOverlay();
   }
@@ -718,7 +842,7 @@ function runMangoSnake(
 
       if (timestamp - lastTick >= CONFIG.tickMs) {
         lastTick = timestamp;
-        step();
+        step(timestamp);
       }
     }
 
@@ -777,13 +901,31 @@ function runMangoSnake(
     startGame();
   });
 
+  closeGameBtn?.addEventListener("click", () => {
+    if (isSubmittingScore) {
+      return;
+    }
+
+    if (endTimeoutId) {
+      window.clearTimeout(endTimeoutId);
+      endTimeoutId = 0;
+    }
+
+    clearArenaEffects();
+    closeShareModal();
+    closeGameModal();
+    state = "idle";
+    restartNode.hidden = true;
+    msgNode.textContent = "Eat mangos. Stay inside the border!";
+  });
+
   submitScoreBtn?.addEventListener("click", () => {
     void sharePendingScore();
   });
 
   skipScoreBtn?.addEventListener("click", () => {
     if (!isSubmittingScore) {
-      hideSharePanel();
+      closeShareModal();
     }
   });
 
@@ -793,20 +935,24 @@ function runMangoSnake(
   bindDirectionButton(rightBtn, "right");
 
   const resizeObserver = new ResizeObserver(() => {
-    resize();
+    if (!gameModal?.hasAttribute("hidden")) {
+      resize();
+    }
   });
 
   if (cnv.parentElement) {
     resizeObserver.observe(cnv.parentElement);
   }
 
-  window.addEventListener("resize", resize);
+  window.addEventListener("resize", () => {
+    if (!gameModal?.hasAttribute("hidden")) {
+      resize();
+    }
+  });
 
   highScore = loadHighScore();
   resetSnake();
-  resize();
   updateHud();
-  msgNode.textContent = "Use arrow keys or WASD. On mobile, use the pad below.";
   animationId = requestAnimationFrame(loop);
 
   window.addEventListener("beforeunload", () => {

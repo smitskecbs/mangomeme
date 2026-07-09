@@ -78,82 +78,99 @@
             <span class="glass-card__reflection" aria-hidden="true"></span>
             <p class="labs-game-card__intro">
               Use <strong>arrow keys</strong> or <strong>WASD</strong> on desktop.
-              On mobile, tap the direction pad below the board.
+              On mobile, use the on-screen direction pad.
             </p>
-
-            <div class="labs-game-wrap" id="ms-arena">
-              <canvas
-                id="ms-canvas"
-                class="labs-game-canvas"
-                aria-label="ManGo Snake game board"
-                role="img"
-              ></canvas>
-            </div>
-
-            <div class="labs-snake-dpad" aria-label="Direction controls">
-              <button type="button" class="labs-dpad-btn labs-dpad-btn--up" id="ms-up" aria-label="Up">
-                ▲
-              </button>
-              <button type="button" class="labs-dpad-btn labs-dpad-btn--left" id="ms-left" aria-label="Left">
-                ◀
-              </button>
-              <button type="button" class="labs-dpad-btn labs-dpad-btn--down" id="ms-down" aria-label="Down">
-                ▼
-              </button>
-              <button type="button" class="labs-dpad-btn labs-dpad-btn--right" id="ms-right" aria-label="Right">
-                ▶
-              </button>
-            </div>
-
-            <div class="labs-game-hud">
-              <p>Score: <strong id="ms-score">0</strong></p>
-              <p>High score: <strong id="ms-high-score">0</strong></p>
-            </div>
-
-            <p class="labs-game-message" id="ms-message" role="status" aria-live="polite">
-              Press Start to begin.
+            <p class="labs-game-card__best">
+              Your best: <strong id="ms-high-score">0</strong>
             </p>
-
-            <div class="labs-highscore-share" id="ms-highscore-share" hidden>
-              <p class="labs-highscore-share__title">New high score!</p>
-              <p class="labs-highscore-share__score">
-                Score: <strong id="ms-share-score">0</strong>
-              </p>
-              <p class="labs-highscore-share__text">
-                Add a display name to share your score with the ManGo community.
-              </p>
-              <label class="labs-highscore-share__label" for="ms-player-name">Display name</label>
-              <input
-                class="labs-highscore-share__input"
-                id="ms-player-name"
-                type="text"
-                maxlength="24"
-                placeholder="ManGo Player"
-                autocomplete="nickname"
-                inputmode="text"
-              />
-              <p
-                class="labs-highscore-share__status"
-                id="ms-share-status"
-                role="status"
-                aria-live="polite"
-              ></p>
-              <div class="labs-highscore-share__actions">
-                <button class="btn btn-copy" id="ms-submit-score" type="button">Share score</button>
-                <button class="btn btn-solscan" id="ms-skip-score" type="button">Skip</button>
-              </div>
-            </div>
-
             <div class="labs-game-actions">
               <button class="btn btn-copy" id="ms-start" type="button">Start game</button>
-              <button class="btn btn-solscan" id="ms-restart" type="button" hidden>
-                Play again
-              </button>
             </div>
           </div>
         </div>
       </section>
     </main>
+
+    <div class="labs-game-modal" id="ms-game-modal" hidden>
+      <div class="labs-game-modal__panel" role="dialog" aria-modal="true" aria-labelledby="ms-game-modal-title">
+        <button class="labs-game-modal__close" id="ms-close-game" type="button" aria-label="Close game">
+          ✕
+        </button>
+        <h2 class="labs-game-modal__title" id="ms-game-modal-title">🥭 ManGo Snake</h2>
+
+        <div class="labs-game-wrap" id="ms-arena">
+          <canvas
+            id="ms-canvas"
+            class="labs-game-canvas"
+            aria-label="ManGo Snake game board"
+            role="img"
+          ></canvas>
+        </div>
+
+        <div class="labs-snake-dpad" aria-label="Direction controls">
+          <button type="button" class="labs-dpad-btn labs-dpad-btn--up" id="ms-up" aria-label="Up">
+            ▲
+          </button>
+          <button type="button" class="labs-dpad-btn labs-dpad-btn--left" id="ms-left" aria-label="Left">
+            ◀
+          </button>
+          <button type="button" class="labs-dpad-btn labs-dpad-btn--down" id="ms-down" aria-label="Down">
+            ▼
+          </button>
+          <button type="button" class="labs-dpad-btn labs-dpad-btn--right" id="ms-right" aria-label="Right">
+            ▶
+          </button>
+        </div>
+
+        <div class="labs-game-hud">
+          <p>Score: <strong id="ms-score">0</strong></p>
+        </div>
+
+        <p class="labs-game-message" id="ms-message" role="status" aria-live="polite">
+          Eat mangos. Stay inside the border!
+        </p>
+
+        <div class="labs-game-actions labs-game-actions--modal">
+          <button class="btn btn-solscan" id="ms-restart" type="button" hidden>
+            Play again
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <div class="labs-share-modal" id="ms-share-modal" hidden>
+      <div class="labs-share-modal__panel" role="dialog" aria-modal="true" aria-labelledby="ms-share-title">
+        <div class="labs-highscore-share" id="ms-highscore-share">
+          <p class="labs-highscore-share__title" id="ms-share-title">New high score!</p>
+          <p class="labs-highscore-share__score">
+            Score: <strong id="ms-share-score">0</strong>
+          </p>
+          <p class="labs-highscore-share__text">
+            Add a display name to share your score with the ManGo community.
+          </p>
+          <label class="labs-highscore-share__label" for="ms-player-name">Display name</label>
+          <input
+            class="labs-highscore-share__input"
+            id="ms-player-name"
+            type="text"
+            maxlength="24"
+            placeholder="ManGo Player"
+            autocomplete="nickname"
+            inputmode="text"
+          />
+          <p
+            class="labs-highscore-share__status"
+            id="ms-share-status"
+            role="status"
+            aria-live="polite"
+          ></p>
+          <div class="labs-highscore-share__actions">
+            <button class="btn btn-copy" id="ms-submit-score" type="button">Share score</button>
+            <button class="btn btn-solscan" id="ms-skip-score" type="button">Skip</button>
+          </div>
+        </div>
+      </div>
+    </div>
 
     <footer class="footer">
       <div class="container">

@@ -1054,6 +1054,107 @@ body.menu-open {
   color: var(--mango);
 }
 
+.labs-game-card__best {
+  position: relative;
+  z-index: 1;
+  margin: 0 0 1rem;
+  font-size: clamp(0.95rem, 2.4vw, 1.02rem);
+  color: rgba(230, 245, 252, 0.92);
+}
+
+.labs-game-card__best strong {
+  color: var(--mango);
+  font-family: var(--font-display);
+}
+
+body.labs-game-modal-open,
+body.labs-share-modal-open {
+  overflow: hidden;
+}
+
+.labs-game-modal,
+.labs-share-modal {
+  position: fixed;
+  inset: 0;
+  z-index: 220;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: clamp(0.75rem, 3vw, 1.5rem);
+  background: rgba(6, 36, 52, 0.78);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+}
+
+.labs-game-modal[hidden],
+.labs-share-modal[hidden] {
+  display: none;
+}
+
+.labs-share-modal {
+  z-index: 230;
+}
+
+.labs-game-modal__panel,
+.labs-share-modal__panel {
+  position: relative;
+  width: min(560px, 100%);
+  max-height: min(92vh, 760px);
+  overflow-y: auto;
+  padding: clamp(1rem, 3vw, 1.35rem);
+  border-radius: calc(var(--radius) + 2px);
+  border: 1px solid rgba(255, 255, 255, 0.22);
+  background: linear-gradient(
+    165deg,
+    rgba(255, 255, 255, 0.12) 0%,
+    rgba(255, 255, 255, 0.06) 100%
+  );
+  box-shadow:
+    0 24px 64px rgba(11, 79, 108, 0.45),
+    inset 0 1px 0 rgba(255, 255, 255, 0.2);
+}
+
+.labs-game-modal__close {
+  position: absolute;
+  top: 0.65rem;
+  right: 0.75rem;
+  z-index: 3;
+  width: 2rem;
+  height: 2rem;
+  border: 1px solid rgba(255, 255, 255, 0.22);
+  border-radius: 999px;
+  background: rgba(8, 52, 74, 0.65);
+  color: rgba(255, 255, 255, 0.92);
+  font-size: 1rem;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.labs-game-modal__title {
+  position: relative;
+  z-index: 1;
+  margin: 0 0 0.85rem;
+  font-family: var(--font-display);
+  font-size: clamp(1.1rem, 3vw, 1.25rem);
+  font-weight: 700;
+  color: rgba(255, 255, 255, 0.96);
+  text-align: center;
+}
+
+.labs-game-actions--modal {
+  margin-top: 0.85rem;
+}
+
+.labs-share-modal .labs-highscore-share {
+  margin: 0;
+  max-width: none;
+  background: transparent;
+  border: none;
+  padding: 0;
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+}
+
 .labs-game-wrap {
   position: relative;
   z-index: 1;
@@ -1129,7 +1230,7 @@ body.menu-open {
 .labs-snake-dpad {
   position: relative;
   z-index: 1;
-  display: none;
+  display: grid;
   grid-template-columns: repeat(3, 3.75rem);
   grid-template-rows: repeat(3, 3.75rem);
   justify-content: center;
@@ -1177,12 +1278,6 @@ body.menu-open {
 .labs-dpad-btn--right {
   grid-column: 3;
   grid-row: 2;
-}
-
-@media (max-width: 768px), (hover: none) and (pointer: coarse) {
-  .labs-snake-dpad {
-    display: grid;
-  }
 }
 
 .labs-game-canvas {
