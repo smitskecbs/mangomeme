@@ -52,6 +52,8 @@ export function initMangoSnake(): void {
   const restartNode = document.getElementById("ms-restart") as HTMLButtonElement | null;
   const startBtn = document.getElementById("ms-start") as HTMLButtonElement | null;
   const sharePanel = document.getElementById("ms-highscore-share");
+  const shareScoreNode = document.getElementById("ms-share-score");
+  const shareStatusNode = document.getElementById("ms-share-status");
   const playerNameInput = document.getElementById("ms-player-name") as HTMLInputElement | null;
   const submitScoreBtn = document.getElementById("ms-submit-score") as HTMLButtonElement | null;
   const skipScoreBtn = document.getElementById("ms-skip-score") as HTMLButtonElement | null;
@@ -75,6 +77,8 @@ export function initMangoSnake(): void {
     restartNode,
     startBtn,
     sharePanel,
+    shareScoreNode,
+    shareStatusNode,
     playerNameInput,
     submitScoreBtn,
     skipScoreBtn,
@@ -94,6 +98,8 @@ function runMangoSnake(
   restartNode: HTMLButtonElement,
   startBtn: HTMLButtonElement | null,
   sharePanel: HTMLElement | null,
+  shareScoreNode: HTMLElement | null,
+  shareStatusNode: HTMLElement | null,
   playerNameInput: HTMLInputElement | null,
   submitScoreBtn: HTMLButtonElement | null,
   skipScoreBtn: HTMLButtonElement | null,
@@ -112,6 +118,7 @@ function runMangoSnake(
   let highScore = loadHighScore();
   let highScoreAtGameStart = highScore;
   let pendingShareScore = 0;
+  let isSubmittingScore = false;
   let lastTick = 0;
   let animationId = 0;
   let gridCols = CONFIG.gridCells;
@@ -159,11 +166,34 @@ function runMangoSnake(
     }
   }
 
+  function setShareStatus(message: string, tone: "default" | "success" | "error" = "default"): void {
+    if (!shareStatusNode) {
+      return;
+    }
+
+    shareStatusNode.textContent = message;
+    shareStatusNode.classList.remove(
+      "labs-highscore-share__status--success",
+      "labs-highscore-share__status--error"
+    );
+
+    if (tone === "success") {
+      shareStatusNode.classList.add("labs-highscore-share__status--success");
+    } else if (tone === "error") {
+      shareStatusNode.classList.add("labs-highscore-share__status--error");
+    }
+  }
+
   function hideSharePanel(): void {
     if (sharePanel) {
       sharePanel.hidden = true;
     }
     pendingShareScore = 0;
+    isSubmittingScore = false;
+    if (submitScoreBtn) {
+      submitScoreBtn.disabled = false;
+    }
+    setShareStatus("");
   }
 
   function showSharePanel(newScore: number): void {
@@ -174,9 +204,26 @@ function runMangoSnake(
     pendingShareScore = newScore;
     sharePanel.hidden = false;
 
+    if (shareScoreNode) {
+      shareScoreNode.textContent = String(newScore);
+    }
+
     if (playerNameInput) {
       playerNameInput.value = loadPlayerName();
+      playerNameInput.disabled = false;
+      playerNameInput.readOnly = false;
     }
+
+    if (submitScoreBtn) {
+      submitScoreBtn.disabled = false;
+    }
+
+    setShareStatus("");
+
+    window.requestAnimationFrame(() => {
+      playerNameInput?.focus();
+      playerNameInput?.select();
+    });
   }
 
   function updateHud(): void {
@@ -262,15 +309,58 @@ function runMangoSnake(
   }
 
   async function sharePendingScore(): Promise<void> {
-    if (pendingShareScore <= 0) {
-      hideSharePanel();
+    if (pendingShareScore <= 0 || isSubmittingScore) {
       return;
     }
 
     const name = playerNameInput?.value.trim() || "ManGo Player";
-    savePlayerName(name);
-    hideSharePanel();
-    await submitSnakeHighscore(pendingShareScore, name);
+    isSubmittingScore = true;
+
+    if (submitScoreBtn) {
+      submitScoreBtn.disabled = true;
+    }
+
+    if (skipScoreBtn) {
+      skipScoreBtn.disabled = true;
+    }
+
+    setShareStatus("Sharing score...");
+
+    const result = await submitSnakeHighscore(pendingShareScore, name);
+
+    isSubmittingScore = false;
+
+    if (skipScoreBtn) {
+      skipScoreBtn.disabled = false;
+    }
+
+    if (result.ok) {
+      savePlayerName(name);
+      setShareStatus("Score shared successfully!", "success");
+      if (submitScoreBtn) {
+        submitScoreBtn.disabled = true;
+      }
+      return;
+    }
+
+    if (submitScoreBtn) {
+      submitScoreBtn.disabled = false;
+    }
+
+    if (result.mixedContent) {
+      setShareStatus("Could not share: API must use HTTPS on mangomeme.fun.", "error");
+      return;
+    }
+
+    setShareStatus(result.error || "Could not share score. Try again.", "error");
+  }
+
+  function isShareFormTarget(target: EventTarget | null): boolean {
+    if (!(target instanceof HTMLElement)) {
+      return false;
+    }
+
+    return Boolean(target.closest("#ms-highscore-share"));
   }
 
   function triggerGameOver(message: string, reason: DeathReason): void {
@@ -642,12 +732,20 @@ function runMangoSnake(
     }
 
     btn.addEventListener("pointerdown", (event) => {
+      if (isShareFormTarget(event.target)) {
+        return;
+      }
+
       event.preventDefault();
       setDirection(dir);
     });
   }
 
   window.addEventListener("keydown", (event) => {
+    if (isShareFormTarget(event.target)) {
+      return;
+    }
+
     const dir = directionFromKey(event.code);
 
     if (!dir) {
@@ -655,6 +753,10 @@ function runMangoSnake(
         event.preventDefault();
         startGame();
       }
+      return;
+    }
+
+    if (state !== "playing") {
       return;
     }
 
@@ -680,7 +782,9 @@ function runMangoSnake(
   });
 
   skipScoreBtn?.addEventListener("click", () => {
-    hideSharePanel();
+    if (!isSubmittingScore) {
+      hideSharePanel();
+    }
   });
 
   bindDirectionButton(upBtn, "up");

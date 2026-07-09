@@ -116,8 +116,11 @@
 
             <div class="labs-highscore-share" id="ms-highscore-share" hidden>
               <p class="labs-highscore-share__title">New high score!</p>
+              <p class="labs-highscore-share__score">
+                Score: <strong id="ms-share-score">0</strong>
+              </p>
               <p class="labs-highscore-share__text">
-                Optional: add a display name to share your score with the ManGo community.
+                Add a display name to share your score with the ManGo community.
               </p>
               <label class="labs-highscore-share__label" for="ms-player-name">Display name</label>
               <input
@@ -127,7 +130,14 @@
                 maxlength="24"
                 placeholder="ManGo Player"
                 autocomplete="nickname"
+                inputmode="text"
               />
+              <p
+                class="labs-highscore-share__status"
+                id="ms-share-status"
+                role="status"
+                aria-live="polite"
+              ></p>
               <div class="labs-highscore-share__actions">
                 <button class="btn btn-copy" id="ms-submit-score" type="button">Share score</button>
                 <button class="btn btn-solscan" id="ms-skip-score" type="button">Skip</button>
