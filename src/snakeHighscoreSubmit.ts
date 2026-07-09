@@ -1,9 +1,13 @@
 /**
  * Frontend high-score submit — posts to the Hetzner bot server only.
- * No Telegram secrets in the browser. Set VITE_MANGO_HIGHSCORE_API_URL in .env.
+ * No Telegram secrets in the browser. Set VITE_MANGO_HIGHSCORE_API_URL in Vercel.
+ *
+ * Must be an absolute URL, e.g.:
+ * https://api.mangomeme.fun/snake-highscore
  */
 
-const HIGH_SCORE_PATH = "/snake-highscore";
+const RAW_ENV_URL = import.meta.env.VITE_MANGO_HIGHSCORE_API_URL?.trim() || "";
+const EXPECTED_PATH = "/snake-highscore";
 
 function normalizeHighScoreApiUrl(raw: string): string {
   const trimmed = raw.trim();
@@ -12,34 +16,63 @@ function normalizeHighScoreApiUrl(raw: string): string {
     return "";
   }
 
+  if (trimmed.startsWith("/") && !trimmed.startsWith("//")) {
+    console.error(
+      "[ManGo Snake] VITE_MANGO_HIGHSCORE_API_URL must be absolute (https://...).",
+      "Relative paths like",
+      trimmed,
+      "post to the website host (Vercel) and return 404."
+    );
+    return "";
+  }
+
+  if (!/^https?:\/\//i.test(trimmed)) {
+    console.error(
+      "[ManGo Snake] VITE_MANGO_HIGHSCORE_API_URL must start with http:// or https://.",
+      "Got:",
+      trimmed
+    );
+    return "";
+  }
+
   try {
     const url = new URL(trimmed);
 
     if (url.pathname.includes("/snake-highscore/snake-highscore")) {
-      url.pathname = url.pathname.replace(/\/snake-highscore\/snake-highscore\/?/g, "/snake-highscore");
+      url.pathname = url.pathname.replace(/\/snake-highscore\/snake-highscore\/?/g, EXPECTED_PATH);
     }
 
     if (url.pathname === "/" || url.pathname === "") {
-      url.pathname = HIGH_SCORE_PATH;
+      url.pathname = EXPECTED_PATH;
     } else if (url.pathname === "/health" || url.pathname.endsWith("/health")) {
-      url.pathname = HIGH_SCORE_PATH;
+      url.pathname = EXPECTED_PATH;
     }
 
-    url.pathname = url.pathname.replace(/\/$/, "") || HIGH_SCORE_PATH;
+    url.pathname = url.pathname.replace(/\/$/, "") || EXPECTED_PATH;
 
     return url.toString();
   } catch {
-    if (trimmed.endsWith("/snake-highscore") || trimmed.endsWith("/snake-highscore/")) {
-      return trimmed.replace(/\/$/, "");
-    }
-
-    return `${trimmed.replace(/\/$/, "")}${HIGH_SCORE_PATH}`;
+    console.error("[ManGo Snake] Invalid VITE_MANGO_HIGHSCORE_API_URL:", trimmed);
+    return "";
   }
 }
 
-const HIGH_SCORE_API_URL = normalizeHighScoreApiUrl(
-  import.meta.env.VITE_MANGO_HIGHSCORE_API_URL?.trim() || ""
-);
+const HIGH_SCORE_API_URL = normalizeHighScoreApiUrl(RAW_ENV_URL);
+
+if (typeof window !== "undefined") {
+  if (!RAW_ENV_URL) {
+    console.warn(
+      "[ManGo Snake] VITE_MANGO_HIGHSCORE_API_URL is empty — score sharing is disabled.",
+      "Set it in Vercel to https://api.mangomeme.fun/snake-highscore and redeploy."
+    );
+  } else if (!HIGH_SCORE_API_URL) {
+    console.warn(
+      "[ManGo Snake] VITE_MANGO_HIGHSCORE_API_URL is invalid — score sharing is disabled.",
+      "Raw value:",
+      RAW_ENV_URL
+    );
+  }
+}
 
 export interface SnakeHighscoreSubmitResult {
   ok: boolean;
@@ -81,15 +114,33 @@ export async function submitSnakeHighscore(
   console.log("[ManGo Snake] Share score clicked");
   console.log("[ManGo Snake] Name:", trimmedName);
   console.log("[ManGo Snake] Score:", score);
-  console.log(
-    "[ManGo Snake] VITE_MANGO_HIGHSCORE_API_URL (raw):",
-    import.meta.env.VITE_MANGO_HIGHSCORE_API_URL || "(empty)"
-  );
+  console.log("[ManGo Snake] VITE_MANGO_HIGHSCORE_API_URL (raw):", RAW_ENV_URL || "(empty)");
   console.log("[ManGo Snake] Normalized POST URL:", requestUrl || "(empty)");
 
+  if (!RAW_ENV_URL) {
+    console.warn("[ManGo Snake] VITE_MANGO_HIGHSCORE_API_URL is not set in this build.");
+    return {
+      ok: false,
+      skipped: true,
+      error: "Score sharing is not configured. Set VITE_MANGO_HIGHSCORE_API_URL in Vercel.",
+    };
+  }
+
   if (!requestUrl) {
-    console.warn("[ManGo Snake] Sharing disabled — VITE_MANGO_HIGHSCORE_API_URL is not set.");
-    return { ok: false, skipped: true, error: "Score sharing is not configured." };
+    return {
+      ok: false,
+      skipped: true,
+      error:
+        "Invalid API URL. Use the full absolute URL: https://api.mangomeme.fun/snake-highscore",
+    };
+  }
+
+  if (!requestUrl.startsWith("http://") && !requestUrl.startsWith("https://")) {
+    return {
+      ok: false,
+      error: "API URL must be absolute — never use a relative path like /snake-highscore.",
+      requestUrl,
+    };
   }
 
   if (requestUrl.includes("/health")) {
@@ -111,6 +162,8 @@ export async function submitSnakeHighscore(
     console.error("[ManGo Snake]", message);
     return { ok: false, mixedContent: true, error: message, requestUrl };
   }
+
+  console.log("[ManGo Snake] Final fetch URL:", requestUrl);
 
   try {
     const response = await fetch(requestUrl, {

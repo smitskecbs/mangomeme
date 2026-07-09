@@ -14,6 +14,7 @@ const CONFIG = {
   bonusEvery: 5,
   bonusPoints: 50,
   bonusLifetimeMs: 4000,
+  growthGlowMs: 420,
   storageKey: "mango-snake-high-score",
   playerNameKey: "mango-snake-player-name",
   bodyRadiusRatio: 0.36,
@@ -28,6 +29,7 @@ const CONFIG = {
     mangoGlow: "rgba(255, 179, 71, 0.5)",
     mangoGlowSoft: "rgba(255, 214, 102, 0.22)",
     bonusGlow: "rgba(255, 214, 102, 0.65)",
+    playfield: "#062a3a",
     idleOverlay: "rgba(6, 42, 58, 0.22)",
   },
 } as const;
@@ -146,6 +148,7 @@ function runMangoSnake(
   let width = 0;
   let height = 0;
   let endTimeoutId = 0;
+  let growthGlowUntil = 0;
 
   const keys = new Set<string>();
   const arena = cnv.parentElement;
@@ -588,6 +591,7 @@ function runMangoSnake(
     if (willEatFood) {
       score += CONFIG.pointsPerMango;
       mangoesEaten += 1;
+      growthGlowUntil = now + CONFIG.growthGlowMs;
 
       if (mangoesEaten % CONFIG.bonusEvery === 0) {
         spawnBonusMango();
@@ -597,6 +601,7 @@ function runMangoSnake(
     } else if (willEatBonus) {
       score += CONFIG.bonusPoints;
       bonusMango = null;
+      growthGlowUntil = now + CONFIG.growthGlowMs;
     } else {
       snake.pop();
     }
@@ -625,7 +630,29 @@ function runMangoSnake(
   }
 
   function drawBackground(): void {
-    gfx.clearRect(0, 0, width, height);
+    gfx.fillStyle = CONFIG.colors.playfield;
+    gfx.fillRect(0, 0, width, height);
+  }
+
+  function drawGrowthGlow(now: number): void {
+    if (snake.length === 0 || now >= growthGlowUntil) {
+      return;
+    }
+
+    const remaining = growthGlowUntil - now;
+    const strength = Math.max(0, remaining / CONFIG.growthGlowMs);
+    const head = segmentCenter(snake[0]);
+    const glowR = Math.min(cellW, cellH) * 2.4;
+    const alpha = strength * 0.38;
+
+    const glow = gfx.createRadialGradient(head.cx, head.cy, glowR * 0.1, head.cx, head.cy, glowR);
+    glow.addColorStop(0, `rgba(94, 217, 160, ${alpha})`);
+    glow.addColorStop(0.55, `rgba(94, 217, 160, ${alpha * 0.45})`);
+    glow.addColorStop(1, "rgba(94, 217, 160, 0)");
+    gfx.fillStyle = glow;
+    gfx.beginPath();
+    gfx.arc(head.cx, head.cy, glowR, 0, Math.PI * 2);
+    gfx.fill();
   }
 
   function drawMangoEmoji(
@@ -830,6 +857,7 @@ function runMangoSnake(
     drawBackground();
     drawFood(now);
     drawBonusMango(now);
+    drawGrowthGlow(now);
     drawSnake();
     drawOverlay();
   }
@@ -865,12 +893,27 @@ function runMangoSnake(
     });
   }
 
+  function restartWithDirection(dir?: Direction): void {
+    startGame();
+
+    if (dir) {
+      direction = dir;
+      nextDirection = dir;
+    }
+  }
+
   window.addEventListener("keydown", (event) => {
     if (isShareFormTarget(event.target)) {
       return;
     }
 
     const dir = directionFromKey(event.code);
+
+    if (state === "over" && dir) {
+      event.preventDefault();
+      restartWithDirection(dir);
+      return;
+    }
 
     if (!dir) {
       if (event.code === "Space" && state === "idle") {
@@ -894,7 +937,7 @@ function runMangoSnake(
   });
 
   restartNode.addEventListener("click", () => {
-    startGame();
+    restartWithDirection();
   });
 
   startBtn?.addEventListener("click", () => {
