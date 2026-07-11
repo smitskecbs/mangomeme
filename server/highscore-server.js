@@ -31,8 +31,9 @@ const RATE_LIMIT_MS = 30_000;
 
 const ALLOWED_ORIGINS = new Set([
   "https://mangomeme.fun",
-  "http://mangomeme.fun",
   "https://www.mangomeme.fun",
+  "http://mangomeme.fun",
+  "http://www.mangomeme.fun",
   "http://localhost:5173",
   "http://127.0.0.1:5173",
   "http://localhost:4173",
@@ -143,21 +144,33 @@ function isRateLimited(ip) {
 function corsOrigin(req) {
   const origin = req.headers.origin;
 
-  if (typeof origin === "string" && ALLOWED_ORIGINS.has(origin)) {
-    return origin;
+  if (typeof origin === "string") {
+    const normalized = origin.trim();
+
+    if (ALLOWED_ORIGINS.has(normalized)) {
+      return normalized;
+    }
   }
 
   return null;
+}
+
+function applyCorsHeaders(res, origin) {
+  if (!origin) {
+    return;
+  }
+
+  res.setHeader("Access-Control-Allow-Origin", origin);
+  res.setHeader("Vary", "Origin");
+  res.setHeader("Access-Control-Allow-Methods", "POST, OPTIONS");
+  res.setHeader("Access-Control-Allow-Headers", "Content-Type");
 }
 
 function sendJson(res, statusCode, body, origin) {
   res.statusCode = statusCode;
   res.setHeader("content-type", "application/json; charset=utf-8");
 
-  if (origin) {
-    res.setHeader("access-control-allow-origin", origin);
-    res.setHeader("vary", "Origin");
-  }
+  applyCorsHeaders(res, origin);
 
   res.end(JSON.stringify(body));
 }
@@ -282,17 +295,13 @@ async function handleSnakeHighscore(req, res, origin) {
 const server = http.createServer(async (req, res) => {
   const url = req.url?.split("?")[0] || "/";
   const origin = corsOrigin(req);
+  const requestOrigin = typeof req.headers.origin === "string" ? req.headers.origin : "(none)";
+
+  console.log(`[ManGo Snake API] ${req.method} ${url} Origin: ${requestOrigin}`);
 
   if (req.method === "OPTIONS") {
     res.statusCode = 204;
-
-    if (origin) {
-      res.setHeader("access-control-allow-origin", origin);
-      res.setHeader("access-control-allow-methods", "POST, OPTIONS");
-      res.setHeader("access-control-allow-headers", "content-type");
-      res.setHeader("vary", "Origin");
-    }
-
+    applyCorsHeaders(res, origin);
     res.end();
     return;
   }

@@ -41,7 +41,8 @@ body {
   overflow-x: hidden;
 }
 
-body::before {
+body::before,
+.labs-game-modal::before {
   content: "";
   position: fixed;
   inset: 0;
@@ -53,7 +54,12 @@ body::before {
   pointer-events: none;
 }
 
-body::after {
+.labs-game-modal::before {
+  z-index: 0;
+}
+
+body::after,
+.labs-game-modal::after {
   content: "";
   position: fixed;
   inset: 0;
@@ -65,6 +71,10 @@ body::after {
     rgba(6, 36, 52, 0.5) 100%
   );
   pointer-events: none;
+}
+
+.labs-game-modal::after {
+  z-index: 0;
 }
 
 /* ── Sky birds ── */
@@ -1086,7 +1096,8 @@ body.labs-share-modal-open {
 
 .labs-game-modal {
   padding: 0;
-  background: #062a3a;
+  background-color: var(--ocean-deep);
+  isolation: isolate;
 }
 
 .labs-share-modal {
@@ -1109,6 +1120,7 @@ body.labs-share-modal-open {
 
 .labs-game-modal__panel {
   position: relative;
+  z-index: 1;
   display: flex;
   flex-direction: column;
   width: 100%;
@@ -1122,7 +1134,7 @@ body.labs-share-modal-open {
     max(0.75rem, env(safe-area-inset-left));
   border: none;
   border-radius: 0;
-  background: #062a3a;
+  background: transparent;
   box-shadow: none;
 }
 
@@ -1237,7 +1249,7 @@ body.labs-share-modal-open {
   justify-content: center;
   gap: 0.75rem;
   padding: 1rem;
-  background: rgba(6, 42, 58, 0.78);
+  background: #062a3a;
   pointer-events: auto;
   text-align: center;
 }
@@ -3093,12 +3105,14 @@ body.checker-modal-open {
 /* ── Mobile ── */
 
 @media (max-width: 640px) {
-  body::before {
+  body::before,
+  .labs-game-modal::before {
     background-position: 48% 37%;
     background-size: cover;
   }
 
-  body::after {
+  body::after,
+  .labs-game-modal::after {
     background: linear-gradient(
       180deg,
       rgba(6, 36, 52, 0.26) 0%,

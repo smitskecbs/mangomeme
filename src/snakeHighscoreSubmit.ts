@@ -8,6 +8,9 @@
 
 const RAW_ENV_URL = import.meta.env.VITE_MANGO_HIGHSCORE_API_URL?.trim() || "";
 const EXPECTED_PATH = "/snake-highscore";
+const EXPECTED_API_URL = "https://api.mangomeme.fun/snake-highscore";
+const NETWORK_CORS_ERROR =
+  "Could not reach the highscore API. Possible network or CORS problem.";
 
 function normalizeHighScoreApiUrl(raw: string): string {
   const trimmed = raw.trim();
@@ -114,6 +117,11 @@ export async function submitSnakeHighscore(
   console.log("[ManGo Snake] Share score clicked");
   console.log("[ManGo Snake] Name:", trimmedName);
   console.log("[ManGo Snake] Score:", score);
+
+  if (typeof window !== "undefined") {
+    console.log("[ManGo Snake] window.location.origin:", window.location.origin);
+  }
+
   console.log("[ManGo Snake] VITE_MANGO_HIGHSCORE_API_URL (raw):", RAW_ENV_URL || "(empty)");
   console.log("[ManGo Snake] Normalized POST URL:", requestUrl || "(empty)");
 
@@ -165,6 +173,13 @@ export async function submitSnakeHighscore(
 
   console.log("[ManGo Snake] Final fetch URL:", requestUrl);
 
+  if (requestUrl !== EXPECTED_API_URL) {
+    console.warn(
+      "[ManGo Snake] Final fetch URL differs from production default:",
+      EXPECTED_API_URL
+    );
+  }
+
   try {
     const response = await fetch(requestUrl, {
       method: "POST",
@@ -202,11 +217,16 @@ export async function submitSnakeHighscore(
 
     return { ok: true, status: response.status, body, requestUrl };
   } catch (error) {
-    console.error("[ManGo Snake] Share request failed:", error);
+    console.error("[ManGo Snake] Fetch error:", error);
+
+    const isFetchFailure =
+      error instanceof TypeError ||
+      (error instanceof Error && /failed to fetch|networkerror|load failed/i.test(error.message));
+
     return {
       ok: false,
       requestUrl,
-      error: error instanceof Error ? error.message : "Network error",
+      error: isFetchFailure ? NETWORK_CORS_ERROR : error instanceof Error ? error.message : NETWORK_CORS_ERROR,
     };
   }
 }
