@@ -1070,6 +1070,8 @@ body.menu-open {
 body.labs-game-modal-open,
 body.labs-share-modal-open {
   overflow: hidden;
+  height: 100dvh;
+  touch-action: none;
 }
 
 .labs-game-modal,
@@ -1078,6 +1080,16 @@ body.labs-share-modal-open {
   inset: 0;
   z-index: 220;
   display: flex;
+  align-items: stretch;
+  justify-content: center;
+}
+
+.labs-game-modal {
+  padding: 0;
+  background: #062a3a;
+}
+
+.labs-share-modal {
   align-items: center;
   justify-content: center;
   padding: clamp(0.75rem, 3vw, 1.5rem);
@@ -1095,7 +1107,25 @@ body.labs-share-modal-open {
   z-index: 230;
 }
 
-.labs-game-modal__panel,
+.labs-game-modal__panel {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  height: 100dvh;
+  max-height: 100dvh;
+  overflow: hidden;
+  padding:
+    max(0.65rem, env(safe-area-inset-top))
+    max(0.75rem, env(safe-area-inset-right))
+    max(0.65rem, env(safe-area-inset-bottom))
+    max(0.75rem, env(safe-area-inset-left));
+  border: none;
+  border-radius: 0;
+  background: #062a3a;
+  box-shadow: none;
+}
+
 .labs-share-modal__panel {
   position: relative;
   width: min(560px, 100%);
@@ -1116,29 +1146,53 @@ body.labs-share-modal-open {
 
 .labs-game-modal__close {
   position: absolute;
-  top: 0.65rem;
-  right: 0.75rem;
-  z-index: 3;
+  top: max(0.65rem, env(safe-area-inset-top));
+  right: max(0.75rem, env(safe-area-inset-right));
+  z-index: 5;
   width: 2rem;
   height: 2rem;
   border: 1px solid rgba(255, 255, 255, 0.22);
   border-radius: 999px;
-  background: rgba(8, 52, 74, 0.65);
+  background: rgba(8, 52, 74, 0.85);
   color: rgba(255, 255, 255, 0.92);
   font-size: 1rem;
   line-height: 1;
   cursor: pointer;
+  pointer-events: auto;
+}
+
+.labs-game-modal__header {
+  position: relative;
+  z-index: 1;
+  flex: 0 0 auto;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0 2.25rem 0.55rem;
+  text-align: center;
 }
 
 .labs-game-modal__title {
-  position: relative;
-  z-index: 1;
-  margin: 0 0 0.85rem;
+  margin: 0;
   font-family: var(--font-display);
-  font-size: clamp(1.1rem, 3vw, 1.25rem);
+  font-size: clamp(1rem, 3.2vw, 1.2rem);
   font-weight: 700;
   color: rgba(255, 255, 255, 0.96);
-  text-align: center;
+}
+
+.labs-game-stage {
+  position: relative;
+  z-index: 1;
+  flex: 1 1 0;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: clamp(0.45rem, 1.8vw, 0.75rem);
+  padding: 0 0.15rem;
+  container-type: size;
 }
 
 .labs-game-actions--modal {
@@ -1158,9 +1212,10 @@ body.labs-share-modal-open {
 .labs-game-wrap {
   position: relative;
   z-index: 1;
-  width: 100%;
-  max-width: 560px;
-  aspect-ratio: 1;
+  flex: 0 0 auto;
+  width: min(100cqw, 100cqh, 560px);
+  height: min(100cqw, 100cqh, 560px);
+  max-width: 100%;
   margin: 0 auto;
   border-radius: 14px;
   overflow: hidden;
@@ -1169,9 +1224,60 @@ body.labs-share-modal-open {
     0 0 16px rgba(94, 217, 160, 0.28),
     0 0 32px rgba(255, 179, 71, 0.14),
     inset 0 1px 0 rgba(255, 255, 255, 0.2);
-  background: rgba(255, 255, 255, 0.04);
-  backdrop-filter: blur(3px);
-  -webkit-backdrop-filter: blur(3px);
+  background: #062a3a;
+}
+
+.labs-game-overlay {
+  position: absolute;
+  inset: 0;
+  z-index: 3;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.75rem;
+  padding: 1rem;
+  background: rgba(6, 42, 58, 0.78);
+  pointer-events: auto;
+  text-align: center;
+}
+
+.labs-game-modal--playing .labs-game-overlay {
+  display: none;
+  pointer-events: none;
+}
+
+.labs-game-overlay__message {
+  margin: 0;
+  max-width: 16rem;
+  font-size: clamp(0.88rem, 2.4vw, 0.98rem);
+  font-weight: 600;
+  line-height: 1.45;
+  color: rgba(255, 255, 255, 0.94);
+}
+
+.labs-game-overlay__final {
+  margin: 0;
+  font-size: clamp(0.95rem, 2.6vw, 1.05rem);
+  color: rgba(184, 228, 249, 0.92);
+}
+
+.labs-game-overlay__final strong {
+  color: var(--mango);
+  font-family: var(--font-display);
+  font-size: 1.15em;
+}
+
+.labs-game-overlay__actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 0.65rem;
+  pointer-events: auto;
+}
+
+.labs-game-overlay__actions .btn {
+  min-width: 9.5rem;
 }
 
 @keyframes labs-arena-wall-hit {
@@ -1230,18 +1336,25 @@ body.labs-share-modal-open {
 .labs-snake-dpad {
   position: relative;
   z-index: 1;
-  display: grid;
-  grid-template-columns: repeat(3, 3.75rem);
-  grid-template-rows: repeat(3, 3.75rem);
+  display: none;
+  flex: 0 0 auto;
+  grid-template-columns: repeat(3, 3.1rem);
+  grid-template-rows: repeat(3, 3.1rem);
   justify-content: center;
-  gap: 0.45rem;
-  margin: 1rem auto 0;
+  gap: 0.35rem;
   width: fit-content;
+  margin: 0 auto;
+}
+
+@media (max-width: 768px) {
+  .labs-game-modal--playing .labs-snake-dpad {
+    display: grid;
+  }
 }
 
 .labs-dpad-btn {
-  width: 3.75rem;
-  height: 3.75rem;
+  width: 3.1rem;
+  height: 3.1rem;
   border: 1px solid rgba(255, 255, 255, 0.28);
   border-radius: 14px;
   background: rgba(8, 52, 74, 0.72);
@@ -1398,9 +1511,9 @@ body.labs-share-modal-open {
   display: flex;
   flex-wrap: wrap;
   justify-content: center;
-  gap: 1.25rem 2rem;
-  margin-top: 1.1rem;
-  font-size: clamp(0.92rem, 2.3vw, 1rem);
+  gap: 0.75rem 1.25rem;
+  margin: 0;
+  font-size: clamp(0.88rem, 2.2vw, 0.96rem);
   color: rgba(184, 228, 249, 0.9);
 }
 

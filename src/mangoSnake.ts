@@ -62,8 +62,10 @@ export function initMangoSnake(): void {
   const highNode = document.getElementById("ms-high-score");
   const msgNode = document.getElementById("ms-message");
   const restartNode = document.getElementById("ms-restart") as HTMLButtonElement | null;
-  const startBtn = document.getElementById("ms-start") as HTMLButtonElement | null;
+  const startPlayBtn = document.getElementById("ms-start-play") as HTMLButtonElement | null;
+  const openGameBtn = document.getElementById("ms-open-game") as HTMLButtonElement | null;
   const gameModal = document.getElementById("ms-game-modal");
+  const overlayScoreNode = document.getElementById("ms-overlay-score");
   const shareModal = document.getElementById("ms-share-modal");
   const closeGameBtn = document.getElementById("ms-close-game") as HTMLButtonElement | null;
   const shareScoreNode = document.getElementById("ms-share-score");
@@ -72,7 +74,7 @@ export function initMangoSnake(): void {
   const submitScoreBtn = document.getElementById("ms-submit-score") as HTMLButtonElement | null;
   const skipScoreBtn = document.getElementById("ms-skip-score") as HTMLButtonElement | null;
 
-  if (!canvas || !scoreNode || !highNode || !msgNode || !restartNode) {
+  if (!canvas || !scoreNode || !highNode || !msgNode || !restartNode || !startPlayBtn) {
     return;
   }
 
@@ -89,8 +91,10 @@ export function initMangoSnake(): void {
     highNode,
     msgNode,
     restartNode,
-    startBtn,
+    startPlayBtn,
+    openGameBtn,
     gameModal,
+    overlayScoreNode,
     shareModal,
     closeGameBtn,
     shareScoreNode,
@@ -112,8 +116,10 @@ function runMangoSnake(
   highNode: HTMLElement,
   msgNode: HTMLElement,
   restartNode: HTMLButtonElement,
-  startBtn: HTMLButtonElement | null,
+  startPlayBtn: HTMLButtonElement,
+  openGameBtn: HTMLButtonElement | null,
   gameModal: HTMLElement | null,
+  overlayScoreNode: HTMLElement | null,
   shareModal: HTMLElement | null,
   closeGameBtn: HTMLButtonElement | null,
   shareScoreNode: HTMLElement | null,
@@ -205,11 +211,86 @@ function runMangoSnake(
     }
   }
 
+  function setModalPhase(phase: "idle" | "playing" | "over"): void {
+    if (!gameModal) {
+      return;
+    }
+
+    gameModal.classList.remove("labs-game-modal--idle", "labs-game-modal--playing", "labs-game-modal--over");
+    gameModal.classList.add(`labs-game-modal--${phase}`);
+
+    window.requestAnimationFrame(() => {
+      resize();
+    });
+  }
+
+  function setOverlayScore(value: number | null): void {
+    if (!overlayScoreNode) {
+      return;
+    }
+
+    const scoreEl = overlayScoreNode.querySelector("strong");
+
+    if (value === null) {
+      overlayScoreNode.hidden = true;
+      return;
+    }
+
+    overlayScoreNode.hidden = false;
+
+    if (scoreEl) {
+      scoreEl.textContent = String(value);
+    }
+  }
+
+  function setIdleOverlay(): void {
+    setModalPhase("idle");
+    startPlayBtn.hidden = false;
+    restartNode.hidden = true;
+    setOverlayScore(null);
+    msgNode.textContent = "Eat mangos. Stay inside the border!";
+  }
+
+  function setPlayingOverlay(): void {
+    setModalPhase("playing");
+    startPlayBtn.hidden = true;
+    restartNode.hidden = true;
+    setOverlayScore(null);
+  }
+
+  function setGameOverOverlay(message: string): void {
+    setModalPhase("over");
+    startPlayBtn.hidden = true;
+    restartNode.hidden = false;
+    setOverlayScore(score);
+    msgNode.textContent = message;
+  }
+
   function openGameModal(): void {
     gameModal?.removeAttribute("hidden");
     document.body.classList.add("labs-game-modal-open");
     window.requestAnimationFrame(() => {
       resize();
+    });
+  }
+
+  function prepareGameModal(): void {
+    if (endTimeoutId) {
+      window.clearTimeout(endTimeoutId);
+      endTimeoutId = 0;
+    }
+
+    closeShareModal();
+    clearArenaEffects();
+    openGameModal();
+    highScoreAtGameStart = highScore;
+    resetSnake();
+    state = "idle";
+    lastTick = 0;
+    setIdleOverlay();
+
+    window.requestAnimationFrame(() => {
+      startPlayBtn.focus();
     });
   }
 
@@ -363,13 +444,16 @@ function runMangoSnake(
 
     closeShareModal();
     clearArenaEffects();
-    openGameModal();
+
+    if (gameModal?.hasAttribute("hidden")) {
+      openGameModal();
+    }
+
     highScoreAtGameStart = highScore;
     resetSnake();
     state = "playing";
     lastTick = 0;
-    msgNode.textContent = "Eat mangos. Stay inside the border!";
-    restartNode.hidden = true;
+    setPlayingOverlay();
   }
 
   function finalizeGameOver(message: string): void {
@@ -383,8 +467,12 @@ function runMangoSnake(
     }
 
     msgNode.textContent = message;
-    restartNode.hidden = false;
+    setGameOverOverlay(message);
     updateHud();
+
+    window.requestAnimationFrame(() => {
+      restartNode.focus();
+    });
 
     if (isNewPersonalBest) {
       openShareModal(score);
@@ -488,17 +576,16 @@ function runMangoSnake(
       return;
     }
 
-    const displayWidth = Math.floor(parent.clientWidth);
-    const displayHeight = Math.floor(parent.clientWidth);
+    const displaySize = Math.floor(Math.min(parent.clientWidth, parent.clientHeight));
 
-    if (displayWidth < 1 || displayHeight < 1) {
+    if (displaySize < 1) {
       return;
     }
 
     const dpr = window.devicePixelRatio || 1;
 
-    width = displayWidth;
-    height = displayHeight;
+    width = displaySize;
+    height = displaySize;
     gridCols = CONFIG.gridCells;
     gridRows = CONFIG.gridCells;
     cellW = width / gridCols;
@@ -512,8 +599,16 @@ function runMangoSnake(
   }
 
   function setDirection(dir: Direction): void {
+    if (state === "over") {
+      restartWithDirection(dir);
+      return;
+    }
+
     if (state === "idle") {
       startGame();
+      direction = dir;
+      nextDirection = dir;
+      return;
     }
 
     if (state !== "playing") {
@@ -839,18 +934,12 @@ function runMangoSnake(
   }
 
   function drawOverlay(): void {
-    if (state !== "idle") {
+    if (state !== "idle" && state !== "over") {
       return;
     }
 
     gfx.fillStyle = CONFIG.colors.idleOverlay;
     gfx.fillRect(0, 0, width, height);
-
-    gfx.fillStyle = "rgba(255, 255, 255, 0.92)";
-    gfx.font = '600 15px "Nunito", sans-serif';
-    gfx.textAlign = "center";
-    gfx.fillText("Press Start to play", width / 2, height / 2);
-    gfx.textAlign = "left";
   }
 
   function draw(now: number): void {
@@ -916,9 +1005,14 @@ function runMangoSnake(
     }
 
     if (!dir) {
-      if (event.code === "Space" && state === "idle") {
-        event.preventDefault();
-        startGame();
+      if (event.code === "Space") {
+        if (state === "idle") {
+          event.preventDefault();
+          startGame();
+        } else if (state === "over") {
+          event.preventDefault();
+          restartWithDirection();
+        }
       }
       return;
     }
@@ -940,8 +1034,12 @@ function runMangoSnake(
     restartWithDirection();
   });
 
-  startBtn?.addEventListener("click", () => {
+  startPlayBtn.addEventListener("click", () => {
     startGame();
+  });
+
+  openGameBtn?.addEventListener("click", () => {
+    prepareGameModal();
   });
 
   closeGameBtn?.addEventListener("click", () => {
@@ -958,7 +1056,10 @@ function runMangoSnake(
     closeShareModal();
     closeGameModal();
     state = "idle";
+    setIdleOverlay();
+    startPlayBtn.hidden = false;
     restartNode.hidden = true;
+    setOverlayScore(null);
     msgNode.textContent = "Eat mangos. Stay inside the border!";
   });
 
@@ -983,7 +1084,11 @@ function runMangoSnake(
     }
   });
 
-  if (cnv.parentElement) {
+  const stageElement = arena?.parentElement;
+
+  if (stageElement) {
+    resizeObserver.observe(stageElement);
+  } else if (cnv.parentElement) {
     resizeObserver.observe(cnv.parentElement);
   }
 

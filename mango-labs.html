@@ -84,56 +84,62 @@
               Your best: <strong id="ms-high-score">0</strong>
             </p>
             <div class="labs-game-actions">
-              <button class="btn btn-copy" id="ms-start" type="button">Start game</button>
+              <button class="btn btn-copy" id="ms-open-game" type="button">Start game</button>
             </div>
           </div>
         </div>
       </section>
     </main>
 
-    <div class="labs-game-modal" id="ms-game-modal" hidden>
+    <div class="labs-game-modal labs-game-modal--idle" id="ms-game-modal" hidden>
       <div class="labs-game-modal__panel" role="dialog" aria-modal="true" aria-labelledby="ms-game-modal-title">
         <button class="labs-game-modal__close" id="ms-close-game" type="button" aria-label="Close game">
           ✕
         </button>
-        <h2 class="labs-game-modal__title" id="ms-game-modal-title">🥭 ManGo Snake</h2>
 
-        <div class="labs-game-wrap" id="ms-arena">
-          <canvas
-            id="ms-canvas"
-            class="labs-game-canvas"
-            aria-label="ManGo Snake game board"
-            role="img"
-          ></canvas>
-        </div>
+        <header class="labs-game-modal__header">
+          <h2 class="labs-game-modal__title" id="ms-game-modal-title">🥭 ManGo Snake</h2>
+          <div class="labs-game-hud">
+            <p>Score: <strong id="ms-score">0</strong></p>
+          </div>
+        </header>
 
-        <div class="labs-snake-dpad" aria-label="Direction controls">
-          <button type="button" class="labs-dpad-btn labs-dpad-btn--up" id="ms-up" aria-label="Up">
-            ▲
-          </button>
-          <button type="button" class="labs-dpad-btn labs-dpad-btn--left" id="ms-left" aria-label="Left">
-            ◀
-          </button>
-          <button type="button" class="labs-dpad-btn labs-dpad-btn--down" id="ms-down" aria-label="Down">
-            ▼
-          </button>
-          <button type="button" class="labs-dpad-btn labs-dpad-btn--right" id="ms-right" aria-label="Right">
-            ▶
-          </button>
-        </div>
+        <div class="labs-game-stage">
+          <div class="labs-game-wrap" id="ms-arena">
+            <canvas
+              id="ms-canvas"
+              class="labs-game-canvas"
+              aria-label="ManGo Snake game board"
+              role="img"
+            ></canvas>
+            <div class="labs-game-overlay" id="ms-game-overlay">
+              <p class="labs-game-overlay__message" id="ms-message" role="status" aria-live="polite">
+                Eat mangos. Stay inside the border!
+              </p>
+              <p class="labs-game-overlay__final" id="ms-overlay-score" hidden>
+                Final score: <strong>0</strong>
+              </p>
+              <div class="labs-game-overlay__actions">
+                <button class="btn btn-copy" id="ms-start-play" type="button">Start game</button>
+                <button class="btn btn-solscan" id="ms-restart" type="button" hidden>Try again</button>
+              </div>
+            </div>
+          </div>
 
-        <div class="labs-game-hud">
-          <p>Score: <strong id="ms-score">0</strong></p>
-        </div>
-
-        <p class="labs-game-message" id="ms-message" role="status" aria-live="polite">
-          Eat mangos. Stay inside the border!
-        </p>
-
-        <div class="labs-game-actions labs-game-actions--modal">
-          <button class="btn btn-solscan" id="ms-restart" type="button" hidden>
-            Play again
-          </button>
+          <div class="labs-snake-dpad" id="ms-dpad" aria-label="Direction controls">
+            <button type="button" class="labs-dpad-btn labs-dpad-btn--up" id="ms-up" aria-label="Up">
+              ▲
+            </button>
+            <button type="button" class="labs-dpad-btn labs-dpad-btn--left" id="ms-left" aria-label="Left">
+              ◀
+            </button>
+            <button type="button" class="labs-dpad-btn labs-dpad-btn--down" id="ms-down" aria-label="Down">
+              ▼
+            </button>
+            <button type="button" class="labs-dpad-btn labs-dpad-btn--right" id="ms-right" aria-label="Right">
+              ▶
+            </button>
+          </div>
         </div>
       </div>
     </div>
