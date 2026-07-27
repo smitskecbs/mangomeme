@@ -1507,6 +1507,15 @@ body.labs-share-modal-open {
   color: #7ee8b2;
 }
 
+.labs-highscore-share__result {
+  margin: 0 0 1rem;
+  font-size: 0.95rem;
+  line-height: 1.5;
+  color: rgba(232, 246, 255, 0.95);
+  white-space: pre-line;
+  text-align: center;
+}
+
 .labs-highscore-share__actions {
   position: relative;
   z-index: 1;

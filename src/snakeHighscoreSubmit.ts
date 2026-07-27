@@ -87,6 +87,8 @@ export interface SnakeHighscoreSubmitResult {
   requestUrl?: string;
 }
 
+export type { SnakeHighscoreApiResponse } from "./snakeScoreResult.ts";
+
 export function isHighScoreSharingEnabled(): boolean {
   return HIGH_SCORE_API_URL.length > 0;
 }

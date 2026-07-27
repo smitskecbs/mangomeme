@@ -147,32 +147,41 @@
     <div class="labs-share-modal" id="ms-share-modal" hidden>
       <div class="labs-share-modal__panel" role="dialog" aria-modal="true" aria-labelledby="ms-share-title">
         <div class="labs-highscore-share" id="ms-highscore-share">
-          <p class="labs-highscore-share__title" id="ms-share-title">New high score!</p>
-          <p class="labs-highscore-share__score">
-            Score: <strong id="ms-share-score">0</strong>
-          </p>
-          <p class="labs-highscore-share__text">
-            Add a display name to share your score with the ManGo community.
-          </p>
-          <label class="labs-highscore-share__label" for="ms-player-name">Display name</label>
-          <input
-            class="labs-highscore-share__input"
-            id="ms-player-name"
-            type="text"
-            maxlength="24"
-            placeholder="ManGo Player"
-            autocomplete="nickname"
-            inputmode="text"
-          />
-          <p
-            class="labs-highscore-share__status"
-            id="ms-share-status"
-            role="status"
-            aria-live="polite"
-          ></p>
-          <div class="labs-highscore-share__actions">
-            <button class="btn btn-copy" id="ms-submit-score" type="button">Share score</button>
-            <button class="btn btn-solscan" id="ms-skip-score" type="button">Skip</button>
+          <div id="ms-share-form">
+            <p class="labs-highscore-share__title" id="ms-share-title">Submit your score</p>
+            <p class="labs-highscore-share__score">
+              Score: <strong id="ms-share-score">0</strong>
+            </p>
+            <p class="labs-highscore-share__text">
+              Enter your display name to submit your score to the ManGo leaderboard.
+            </p>
+            <label class="labs-highscore-share__label" for="ms-player-name">Display name</label>
+            <input
+              class="labs-highscore-share__input"
+              id="ms-player-name"
+              type="text"
+              maxlength="24"
+              placeholder="ManGo Player"
+              autocomplete="nickname"
+              inputmode="text"
+            />
+            <p
+              class="labs-highscore-share__status"
+              id="ms-share-status"
+              role="status"
+              aria-live="polite"
+            ></p>
+            <div class="labs-highscore-share__actions">
+              <button class="btn btn-copy" id="ms-submit-score" type="button">Submit score</button>
+              <button class="btn btn-solscan" id="ms-skip-score" type="button">Skip</button>
+            </div>
+          </div>
+          <div id="ms-share-result" hidden>
+            <p class="labs-highscore-share__title" id="ms-share-result-title"></p>
+            <p class="labs-highscore-share__result" id="ms-share-result-body"></p>
+            <div class="labs-highscore-share__actions">
+              <button class="btn btn-copy" id="ms-share-done" type="button">Done</button>
+            </div>
           </div>
         </div>
       </div>
