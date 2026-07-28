@@ -773,6 +773,41 @@ function runMangoSnake(
     return CONFIG.colors.snakeHead;
   }
 
+  function drawRoundedSegment(cx: number, cy: number, size: number, cornerRadius: number, strokeWidth = 0): void {
+    const safeSize = Math.max(1, size);
+    const half = safeSize / 2;
+    const x = cx - half;
+    const y = cy - half;
+    const maxRadius = safeSize / 2;
+    const safeRadius = Math.max(0, Math.min(cornerRadius, maxRadius));
+
+    gfx.fillStyle = snakeFillColor();
+
+    if (safeRadius <= 0) {
+      gfx.fillRect(x, y, safeSize, safeSize);
+
+      if (strokeWidth > 0) {
+        gfx.strokeStyle = CONFIG.colors.snakeStroke;
+        gfx.lineWidth = strokeWidth;
+        gfx.strokeRect(x, y, safeSize, safeSize);
+      }
+
+      return;
+    }
+
+    gfx.beginPath();
+    gfx.roundRect(x, y, safeSize, safeSize, safeRadius);
+    gfx.fill();
+
+    if (strokeWidth > 0) {
+      gfx.strokeStyle = CONFIG.colors.snakeStroke;
+      gfx.lineWidth = strokeWidth;
+      gfx.beginPath();
+      gfx.roundRect(x, y, safeSize, safeSize, safeRadius);
+      gfx.stroke();
+    }
+  }
+
   function drawBackground(): void {
     const playfieldGradient = gfx.createLinearGradient(0, 0, width, height);
     playfieldGradient.addColorStop(0, playfieldGradientStart);
@@ -880,54 +915,31 @@ function runMangoSnake(
       return;
     }
 
-    const bodyR = Math.min(cellW, cellH) * CONFIG.bodyRadiusRatio;
-    const headR = Math.min(cellW, cellH) * CONFIG.headRadiusRatio;
-    const points = snake.map(segmentCenter);
+    const cell = Math.min(cellW, cellH);
 
-    gfx.lineCap = "round";
-    gfx.lineJoin = "round";
-
-    for (let index = points.length - 1; index > 0; index -= 1) {
-      const from = points[index];
-      const to = points[index - 1];
-
-      gfx.strokeStyle = snakeFillColor();
-      gfx.lineWidth = bodyR * 2.05;
-      gfx.beginPath();
-      gfx.moveTo(from.cx, from.cy);
-      gfx.lineTo(to.cx, to.cy);
-      gfx.stroke();
+    if (cell < 1) {
+      return;
     }
+
+    const requestedGap = Math.max(1, Math.min(2, cell * 0.05));
+    const maxGap = Math.max(0, cell - 1);
+    const segmentGap = Math.min(requestedGap, maxGap);
+    const bodySize = Math.max(1, cell - segmentGap);
+    const headSize = Math.max(1, bodySize * 1.08);
+    const bodyCornerRadius = bodySize * 0.22;
+    const headCornerRadius = headSize * 0.22;
+    const points = snake.map(segmentCenter);
 
     for (let index = snake.length - 1; index > 0; index -= 1) {
       const { cx, cy } = points[index];
-
-      gfx.fillStyle = snakeFillColor();
-      gfx.beginPath();
-      gfx.arc(cx, cy, bodyR, 0, Math.PI * 2);
-      gfx.fill();
+      drawRoundedSegment(cx, cy, bodySize, bodyCornerRadius, 1);
     }
 
     const head = points[0];
-    const headGlow = gfx.createRadialGradient(head.cx, head.cy, headR * 0.2, head.cx, head.cy, headR * 1.5);
-    headGlow.addColorStop(0, CONFIG.colors.snakeHeadGlow);
-    headGlow.addColorStop(1, "rgba(94, 217, 160, 0)");
-    gfx.fillStyle = headGlow;
-    gfx.beginPath();
-    gfx.arc(head.cx, head.cy, headR * 1.5, 0, Math.PI * 2);
-    gfx.fill();
+    drawRoundedSegment(head.cx, head.cy, headSize, headCornerRadius, 2.5);
 
-    gfx.fillStyle = snakeFillColor();
-    gfx.beginPath();
-    gfx.arc(head.cx, head.cy, headR, 0, Math.PI * 2);
-    gfx.fill();
-
-    gfx.strokeStyle = CONFIG.colors.snakeStroke;
-    gfx.lineWidth = 1.5;
-    gfx.stroke();
-
-    const eyeOffset = headR * 0.28;
-    const eyeR = headR * 0.11;
+    const eyeOffset = headSize * 0.18;
+    const eyeR = headSize * 0.08;
     let eyeAx = head.cx;
     let eyeAy = head.cy;
     let eyeBx = head.cx;
