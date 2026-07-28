@@ -72,6 +72,7 @@ runTest("no personal best message", () => {
       rank: 3,
       globalHighScore: 760,
       globalHighScoreName: "Kevin",
+      gamesPlayed: 14,
     },
     520
   );
@@ -81,6 +82,25 @@ runTest("no personal best message", () => {
   assert.match(message.body, /730/);
   assert.match(message.body, /#3/);
   assert.match(message.body, /760 by Kevin/);
+  assert.match(message.body, /Games played:\n14/);
+});
+
+runTest("games played is optional in result message", () => {
+  const message = formatSnakeScoreResult(
+    {
+      ok: true,
+      personalBest: false,
+      personalBestImproved: false,
+      score: 520,
+      personalBestScore: 730,
+      rank: 3,
+      globalHighScore: 760,
+      globalHighScoreName: "Kevin",
+    },
+    520
+  );
+
+  assert.doesNotMatch(message.body, /Games played/);
 });
 
 runTest("equal score is treated as no personal best", () => {
