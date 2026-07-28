@@ -469,8 +469,11 @@ function runMangoSnake(
     }
   }
 
-  function isOutOfBounds(point: Point): boolean {
-    return point.x < 0 || point.x >= gridCols || point.y < 0 || point.y >= gridRows;
+  function wrapPoint(point: Point): Point {
+    return {
+      x: ((point.x % gridCols) + gridCols) % gridCols,
+      y: ((point.y % gridRows) + gridRows) % gridRows,
+    };
   }
 
   function clearArenaEffects(): void {
@@ -713,23 +716,20 @@ function runMangoSnake(
         break;
     }
 
-    if (isOutOfBounds(nextHead)) {
-      triggerGameOver("Game over — you hit the wall!", "wall");
-      return;
-    }
+    const wrappedHead = wrapPoint(nextHead);
 
-    const willEatFood = nextHead.x === food.x && nextHead.y === food.y;
+    const willEatFood = wrappedHead.x === food.x && wrappedHead.y === food.y;
     const willEatBonus =
-      bonusMango !== null && nextHead.x === bonusMango.x && nextHead.y === bonusMango.y;
+      bonusMango !== null && wrappedHead.x === bonusMango.x && wrappedHead.y === bonusMango.y;
     const willGrow = willEatFood || willEatBonus;
     const bodyToCheck = willGrow ? snake : snake.slice(0, -1);
 
-    if (bodyToCheck.some((segment) => segment.x === nextHead.x && segment.y === nextHead.y)) {
+    if (bodyToCheck.some((segment) => segment.x === wrappedHead.x && segment.y === wrappedHead.y)) {
       triggerGameOver("Game over — you bit yourself!", "self");
       return;
     }
 
-    snake.unshift(nextHead);
+    snake.unshift(wrappedHead);
 
     if (willEatFood) {
       score += CONFIG.pointsPerMango;

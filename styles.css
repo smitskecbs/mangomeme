@@ -1104,9 +1104,7 @@ body.labs-share-modal-open {
   align-items: center;
   justify-content: center;
   padding: clamp(0.75rem, 3vw, 1.5rem);
-  background: rgba(6, 36, 52, 0.78);
-  backdrop-filter: blur(10px);
-  -webkit-backdrop-filter: blur(10px);
+  background: rgba(6, 36, 52, 0.72);
 }
 
 .labs-game-modal[hidden],
@@ -1145,11 +1143,12 @@ body.labs-share-modal-open {
   overflow-y: auto;
   padding: clamp(1rem, 3vw, 1.35rem);
   border-radius: calc(var(--radius) + 2px);
-  border: 1px solid rgba(255, 255, 255, 0.22);
-  background: linear-gradient(
+  border: 1px solid var(--glass-border);
+  background-color: var(--ocean-deep);
+  background-image: linear-gradient(
     165deg,
-    rgba(255, 255, 255, 0.12) 0%,
-    rgba(255, 255, 255, 0.06) 100%
+    var(--ocean-mid) 0%,
+    var(--ocean-deep) 100%
   );
   box-shadow:
     0 24px 64px rgba(11, 79, 108, 0.45),
@@ -1423,10 +1422,13 @@ body.labs-share-modal-open {
   margin: 1rem auto 0;
   padding: 1rem 1.1rem;
   border-radius: 12px;
-  border: 1px solid rgba(255, 255, 255, 0.2);
-  background: rgba(8, 52, 74, 0.45);
-  backdrop-filter: blur(8px);
-  -webkit-backdrop-filter: blur(8px);
+  border: 1px solid var(--glass-border);
+  background-color: var(--ocean-deep);
+  background-image: linear-gradient(
+    165deg,
+    var(--ocean-mid) 0%,
+    var(--ocean-deep) 100%
+  );
   text-align: center;
 }
 
@@ -1471,9 +1473,9 @@ body.labs-share-modal-open {
   margin-bottom: 0.65rem;
   padding: 0.55rem 0.75rem;
   border-radius: 10px;
-  border: 1px solid rgba(255, 255, 255, 0.22);
-  background: rgba(255, 255, 255, 0.08);
-  color: rgba(255, 255, 255, 0.95);
+  border: 1px solid var(--glass-border);
+  background-color: var(--ocean-mid);
+  color: var(--text-on-blue);
   font-family: var(--font-body);
   font-size: 0.95rem;
   pointer-events: auto;
