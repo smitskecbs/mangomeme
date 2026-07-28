@@ -769,12 +769,8 @@ function runMangoSnake(
     };
   }
 
-  function bodyColorAlongSnake(index: number): string {
-    if (index === 0) {
-      return CONFIG.colors.snakeHead;
-    }
-
-    return index % 2 === 0 ? CONFIG.colors.snakeBodyLight : CONFIG.colors.snakeBody;
+  function snakeFillColor(): string {
+    return CONFIG.colors.snakeHead;
   }
 
   function drawBackground(): void {
@@ -895,7 +891,7 @@ function runMangoSnake(
       const from = points[index];
       const to = points[index - 1];
 
-      gfx.strokeStyle = bodyColorAlongSnake(index);
+      gfx.strokeStyle = snakeFillColor();
       gfx.lineWidth = bodyR * 2.05;
       gfx.beginPath();
       gfx.moveTo(from.cx, from.cy);
@@ -906,7 +902,7 @@ function runMangoSnake(
     for (let index = snake.length - 1; index > 0; index -= 1) {
       const { cx, cy } = points[index];
 
-      gfx.fillStyle = bodyColorAlongSnake(index);
+      gfx.fillStyle = snakeFillColor();
       gfx.beginPath();
       gfx.arc(cx, cy, bodyR, 0, Math.PI * 2);
       gfx.fill();
@@ -921,17 +917,7 @@ function runMangoSnake(
     gfx.arc(head.cx, head.cy, headR * 1.5, 0, Math.PI * 2);
     gfx.fill();
 
-    const headFill = gfx.createRadialGradient(
-      head.cx - headR * 0.2,
-      head.cy - headR * 0.25,
-      headR * 0.1,
-      head.cx,
-      head.cy,
-      headR
-    );
-    headFill.addColorStop(0, CONFIG.colors.snakeHead);
-    headFill.addColorStop(1, CONFIG.colors.snakeHeadAccent);
-    gfx.fillStyle = headFill;
+    gfx.fillStyle = snakeFillColor();
     gfx.beginPath();
     gfx.arc(head.cx, head.cy, headR, 0, Math.PI * 2);
     gfx.fill();
