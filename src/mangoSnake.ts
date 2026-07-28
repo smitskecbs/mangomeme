@@ -116,6 +116,7 @@ export function initMangoSnake(): void {
     submitScoreBtn,
     skipScoreBtn,
     shareDoneBtn,
+    document.getElementById("ms-dpad"),
     document.getElementById("ms-up"),
     document.getElementById("ms-down"),
     document.getElementById("ms-left"),
@@ -146,6 +147,7 @@ function runMangoSnake(
   submitScoreBtn: HTMLButtonElement | null,
   skipScoreBtn: HTMLButtonElement | null,
   shareDoneBtn: HTMLButtonElement | null,
+  dpad: HTMLElement | null,
   upBtn: HTMLElement | null,
   downBtn: HTMLElement | null,
   leftBtn: HTMLElement | null,
@@ -177,6 +179,9 @@ function runMangoSnake(
 
   const keys = new Set<string>();
   const arena = cnv.parentElement;
+  const rootStyles = getComputedStyle(document.documentElement);
+  const playfieldGradientStart = rootStyles.getPropertyValue("--ocean-mid").trim() || "#1a7a9e";
+  const playfieldGradientEnd = rootStyles.getPropertyValue("--ocean-deep").trim() || "#0b4f6c";
 
   function loadHighScore(): number {
     try {
@@ -773,7 +778,10 @@ function runMangoSnake(
   }
 
   function drawBackground(): void {
-    gfx.fillStyle = CONFIG.colors.playfield;
+    const playfieldGradient = gfx.createLinearGradient(0, 0, width, height);
+    playfieldGradient.addColorStop(0, playfieldGradientStart);
+    playfieldGradient.addColorStop(1, playfieldGradientEnd);
+    gfx.fillStyle = playfieldGradient;
     gfx.fillRect(0, 0, width, height);
   }
 
@@ -1015,6 +1023,25 @@ function runMangoSnake(
     animationId = requestAnimationFrame(loop);
   }
 
+  function stopControlEvent(event: Event): void {
+    event.preventDefault();
+    event.stopPropagation();
+  }
+
+  function bindDpadGuard(controlCluster: HTMLElement | null): void {
+    if (!controlCluster) {
+      return;
+    }
+
+    const guardEvent = (event: Event): void => {
+      stopControlEvent(event);
+    };
+
+    controlCluster.addEventListener("pointerdown", guardEvent);
+    controlCluster.addEventListener("pointerup", guardEvent);
+    controlCluster.addEventListener("click", guardEvent);
+  }
+
   function bindDirectionButton(btn: HTMLElement | null, dir: Direction): void {
     if (!btn) {
       return;
@@ -1025,8 +1052,12 @@ function runMangoSnake(
         return;
       }
 
-      event.preventDefault();
+      stopControlEvent(event);
       setDirection(dir);
+    });
+
+    btn.addEventListener("click", (event) => {
+      stopControlEvent(event);
     });
   }
 
@@ -1125,6 +1156,7 @@ function runMangoSnake(
     closeShareModal();
   });
 
+  bindDpadGuard(dpad);
   bindDirectionButton(upBtn, "up");
   bindDirectionButton(downBtn, "down");
   bindDirectionButton(leftBtn, "left");
