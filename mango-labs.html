@@ -96,12 +96,13 @@
           <div class="glass-card glass-card--featured labs-game-card reveal">
             <span class="glass-card__reflection" aria-hidden="true"></span>
             <p class="labs-game-card__intro">
-              Bounce the mango through the level, collect every ring, avoid the spikes,
-              and reach the finish. Use <strong>arrow keys</strong> or <strong>A / D</strong>
+              Bounce the mango through the levels, collect every ring, avoid the hazards,
+              and reach the finish. Your best is the highest level you clear.
+              Use <strong>arrow keys</strong> or <strong>A / D</strong>
               on desktop. On mobile, use the left and right buttons.
             </p>
             <p class="labs-game-card__best">
-              Your best: <strong id="mb-high-score">0</strong>
+              Your best level: <strong id="mb-high-score">0</strong>
             </p>
             <div class="labs-game-actions">
               <button class="btn btn-copy" id="mb-open-game" type="button">Start game</button>
@@ -173,8 +174,7 @@
         <header class="labs-game-modal__header">
           <h2 class="labs-game-modal__title" id="mb-game-modal-title">🥭 Bounch</h2>
           <div class="labs-game-hud">
-            <p><strong id="mb-level-label">Level 1</strong></p>
-            <p>Rings: <strong id="mb-score">0 / 4</strong></p>
+            <p>Level: <strong id="mb-score">1</strong></p>
             <p>Best: <strong id="mb-hud-best">0</strong></p>
           </div>
         </header>
@@ -192,7 +192,7 @@
                 Collect every ring, avoid the spikes, reach the finish!
               </p>
               <p class="labs-game-overlay__final" id="mb-overlay-score" hidden>
-                Rings: <strong>0</strong>
+                Level cleared: <strong>0</strong>
               </p>
               <div class="labs-game-overlay__actions">
                 <button class="btn btn-copy" id="mb-start-play" type="button">Start game</button>

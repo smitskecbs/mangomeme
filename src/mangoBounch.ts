@@ -4,7 +4,7 @@
  */
 
 const CONFIG = {
-  storageKey: "mango-bounch-high-score",
+  storageKey: "mango-bounch-best-level",
   worldHeight: 420,
   gravity: 1400,
   bounceSpeed: 520,
@@ -190,6 +190,71 @@ const LEVELS: LevelDef[] = [
     ],
     finish: { x: 2080, y: GROUND_Y - 96, w: 36, h: 96 },
   },
+  {
+    id: 4,
+    name: "Level 4",
+    worldWidth: 2800,
+    startX: 90,
+    readyHint: "Final stretch. Time the hazards.",
+    platforms: [
+      { x: 0, y: GROUND_Y, w: 2800, h: 48 },
+      { x: 700, y: GROUND_Y - 32, w: 220, h: 24 },
+      { x: 1400, y: GROUND_Y - 40, w: 200, h: 24 },
+      { x: 2100, y: GROUND_Y - 32, w: 240, h: 24 },
+    ],
+    spikes: [
+      { x: 520, y: GROUND_Y - 18, w: 40, h: 18 },
+      { x: 1180, y: GROUND_Y - 18, w: 44, h: 18 },
+      { x: 1850, y: GROUND_Y - 18, w: 40, h: 18 },
+    ],
+    movingHazards: [
+      {
+        x: 640,
+        w: 70,
+        h: 18,
+        yMin: GROUND_Y - 160,
+        yMax: GROUND_Y - 18,
+        speed: 90,
+        startY: GROUND_Y - 18,
+      },
+      {
+        x: 1050,
+        w: 76,
+        h: 18,
+        yMin: GROUND_Y - 175,
+        yMax: GROUND_Y - 18,
+        speed: 105,
+        startY: GROUND_Y - 175,
+      },
+      {
+        x: 1550,
+        w: 72,
+        h: 18,
+        yMin: GROUND_Y - 165,
+        yMax: GROUND_Y - 50,
+        speed: 100,
+        startY: GROUND_Y - 90,
+      },
+      {
+        x: 2000,
+        w: 78,
+        h: 18,
+        yMin: GROUND_Y - 170,
+        yMax: GROUND_Y - 18,
+        speed: 110,
+        startY: GROUND_Y - 18,
+      },
+    ],
+    rings: [
+      { x: 280, y: GROUND_Y - 80, r: 14 },
+      { x: 780, y: GROUND_Y - 120, r: 14 },
+      { x: 1120, y: GROUND_Y - 130, r: 14 },
+      { x: 1480, y: GROUND_Y - 120, r: 14 },
+      { x: 1750, y: GROUND_Y - 90, r: 14 },
+      { x: 2300, y: GROUND_Y - 110, r: 14 },
+    ],
+    finish: { x: 2650, y: GROUND_Y - 96, w: 36, h: 96 },
+  },
 ];
 
 let activeClose: (() => void) | null = null;
@@ -287,6 +352,7 @@ function runMangoBounch(
   let state: GameState = "idle";
   let levelIndex = 0;
   let ringsCollected = 0;
+  let clearedLevel = 0;
   let highScore = loadHighScore();
   let viewW = 0;
   let viewH = 0;
@@ -339,7 +405,11 @@ function runMangoBounch(
     try {
       const raw = localStorage.getItem(CONFIG.storageKey);
       const parsed = raw ? Number.parseInt(raw, 10) : 0;
-      return Number.isFinite(parsed) ? Math.max(0, parsed) : 0;
+      if (!Number.isFinite(parsed)) {
+        return 0;
+      }
+
+      return Math.max(0, Math.min(LEVELS.length, parsed));
     } catch {
       return 0;
     }
@@ -353,8 +423,17 @@ function runMangoBounch(
     }
   }
 
+  function recordLevelClear(levelId: number): void {
+    clearedLevel = Math.max(clearedLevel, levelId);
+
+    if (clearedLevel > highScore) {
+      highScore = clearedLevel;
+      saveHighScore(highScore);
+    }
+  }
+
   function updateHud(): void {
-    scoreNode.textContent = `${ringsCollected} / ${totalRings()}`;
+    scoreNode.textContent = String(activeLevel().id);
     highNode.textContent = String(highScore);
 
     if (hudBestNode) {
@@ -469,7 +548,7 @@ function runMangoBounch(
   function setEndOverlay(message: string, mode: "over" | "next-level" | "play-again"): void {
     setModalPhase("over");
     setEndActions(mode);
-    setOverlayScore(ringsCollected);
+    setOverlayScore(clearedLevel);
     setNodeVisible(howtoNode, false);
     setNodeVisible(levelReadyNode, false);
     msgNode.textContent = message;
@@ -488,6 +567,7 @@ function runMangoBounch(
     clearMovementInput();
     state = "idle";
     levelIndex = 0;
+    clearedLevel = 0;
     gameModal?.setAttribute("hidden", "");
     document.body.classList.remove("labs-game-modal-open");
     resetLevel();
@@ -500,6 +580,7 @@ function runMangoBounch(
     openGameModal();
     highScore = loadHighScore();
     levelIndex = 0;
+    clearedLevel = 0;
     resetLevel();
     state = "idle";
     lastTs = 0;
@@ -580,9 +661,8 @@ function runMangoBounch(
     mango.vx = 0;
     mango.vy = 0;
 
-    if (ringsCollected > highScore) {
-      highScore = ringsCollected;
-      saveHighScore(highScore);
+    if (next === "won") {
+      recordLevelClear(activeLevel().id);
     }
 
     updateHud();
@@ -1088,9 +1168,10 @@ function runMangoBounch(
         enterReady();
       } else if (state === "won") {
         event.preventDefault();
-        if (levelIndex === 0 || levelIndex === 1) {
+        if (levelIndex < LEVELS.length - 1) {
           goToLevel(levelIndex + 1);
-        } else if (levelIndex === LEVELS.length - 1) {
+        } else {
+          clearedLevel = 0;
           goToLevel(0);
         }
       }
@@ -1120,7 +1201,7 @@ function runMangoBounch(
       return;
     }
 
-    if (levelIndex !== 0 && levelIndex !== 1) {
+    if (levelIndex >= LEVELS.length - 1) {
       return;
     }
 
@@ -1136,11 +1217,13 @@ function runMangoBounch(
       return;
     }
 
+    clearedLevel = 0;
     goToLevel(0);
   });
 
   startPlayBtn.addEventListener("click", () => {
     levelIndex = 0;
+    clearedLevel = 0;
     enterReady();
   });
 
