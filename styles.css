@@ -637,6 +637,10 @@ body.menu-open {
   transition: transform 0.15s, box-shadow 0.15s;
 }
 
+.btn[hidden] {
+  display: none !important;
+}
+
 .btn:hover {
   transform: translateY(-2px);
 }

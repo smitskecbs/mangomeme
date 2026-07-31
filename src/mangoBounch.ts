@@ -1013,9 +1013,9 @@ function runMangoBounch(
         enterReady();
       } else if (state === "won") {
         event.preventDefault();
-        if (levelIndex < LEVELS.length - 1) {
+        if (levelIndex === 0 || levelIndex === 1) {
           goToLevel(levelIndex + 1);
-        } else {
+        } else if (levelIndex === LEVELS.length - 1) {
           goToLevel(0);
         }
       }
@@ -1041,10 +1041,26 @@ function runMangoBounch(
   });
 
   nextLevelBtn?.addEventListener("click", () => {
+    if (state !== "won") {
+      return;
+    }
+
+    if (levelIndex !== 0 && levelIndex !== 1) {
+      return;
+    }
+
     goToLevel(levelIndex + 1);
   });
 
   playAgainBtn?.addEventListener("click", () => {
+    if (state !== "won") {
+      return;
+    }
+
+    if (levelIndex !== LEVELS.length - 1) {
+      return;
+    }
+
     goToLevel(0);
   });
 
