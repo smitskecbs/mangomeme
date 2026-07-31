@@ -1,8 +1,11 @@
 {
   "buildCommand": "npm run build",
   "outputDirectory": "dist",
+  "redirects": [
+    { "source": "/just-for-fun", "destination": "/mango-labs", "permanent": true },
+    { "source": "/just-for-fun.html", "destination": "/mango-labs", "permanent": true }
+  ],
   "rewrites": [
-    { "source": "/just-for-fun", "destination": "/just-for-fun.html" },
     { "source": "/mango-labs", "destination": "/mango-labs.html" }
   ]
 }

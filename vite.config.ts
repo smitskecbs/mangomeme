@@ -21,7 +21,6 @@ export default defineConfig(({ mode }) => {
       rollupOptions: {
         input: {
           main: resolve(__dirname, "index.html"),
-          justForFun: resolve(__dirname, "just-for-fun.html"),
           mangoLabs: resolve(__dirname, "mango-labs.html"),
         },
       },
