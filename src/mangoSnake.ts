@@ -60,6 +60,12 @@ const OPPOSITE: Record<Direction, Direction> = {
   right: "left",
 };
 
+let activeClose: (() => void) | null = null;
+
+export function closeMangoSnake(): void {
+  activeClose?.();
+}
+
 export function initMangoSnake(): void {
   const canvas = document.getElementById("ms-canvas") as HTMLCanvasElement | null;
   const scoreNode = document.getElementById("ms-score");
@@ -322,6 +328,25 @@ function runMangoSnake(
     gameModal?.setAttribute("hidden", "");
     document.body.classList.remove("labs-game-modal-open");
   }
+
+  function dismissSnakeSession(): void {
+    if (endTimeoutId) {
+      window.clearTimeout(endTimeoutId);
+      endTimeoutId = 0;
+    }
+
+    clearArenaEffects();
+    closeShareModal();
+    closeGameModal();
+    state = "idle";
+    setIdleOverlay();
+    startPlayBtn.hidden = false;
+    restartNode.hidden = true;
+    setOverlayScore(null);
+    msgNode.textContent = "Eat mangos. Stay inside the border!";
+  }
+
+  activeClose = dismissSnakeSession;
 
   function resetShareModalToForm(): void {
     shareFormNode?.removeAttribute("hidden");
@@ -1069,6 +1094,10 @@ function runMangoSnake(
   }
 
   window.addEventListener("keydown", (event) => {
+    if (gameModal?.hasAttribute("hidden")) {
+      return;
+    }
+
     if (isShareFormTarget(event.target)) {
       return;
     }
@@ -1124,20 +1153,7 @@ function runMangoSnake(
       return;
     }
 
-    if (endTimeoutId) {
-      window.clearTimeout(endTimeoutId);
-      endTimeoutId = 0;
-    }
-
-    clearArenaEffects();
-    closeShareModal();
-    closeGameModal();
-    state = "idle";
-    setIdleOverlay();
-    startPlayBtn.hidden = false;
-    restartNode.hidden = true;
-    setOverlayScore(null);
-    msgNode.textContent = "Eat mangos. Stay inside the border!";
+    dismissSnakeSession();
   });
 
   submitScoreBtn?.addEventListener("click", () => {
@@ -1191,5 +1207,6 @@ function runMangoSnake(
     }
     resizeObserver.disconnect();
     cancelAnimationFrame(animationId);
+    activeClose = null;
   });
 }

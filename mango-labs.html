@@ -7,7 +7,7 @@
       name="description"
       content="ManGo Labs — experiments and mini games from the ManGo community."
     />
-    <title>ManGo Labs · ManGo Snake</title>
+    <title>ManGo Labs · Mini games</title>
     <link rel="icon" type="image/png" href="/src/assets/logo.png" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
@@ -64,8 +64,8 @@
         </p>
         <h1 class="page-hero__title">ManGo Labs</h1>
         <p class="page-hero__subtitle">
-          Every week we're building and testing something new. This week: guide
-          the ManGo snake, eat mangos, and beat your high score.
+          Every week we're building and testing something new. Play ManGo Snake,
+          bounce the mango in Bounch, and beat your personal best.
         </p>
       </div>
     </section>
@@ -85,6 +85,26 @@
             </p>
             <div class="labs-game-actions">
               <button class="btn btn-copy" id="ms-open-game" type="button">Start game</button>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section class="chapter chapter-labs" id="mango-bounch">
+        <div class="chapter-inner chapter-inner--labs">
+          <p class="chapter-label chapter-label--compact reveal">🥭 Bounch</p>
+          <div class="glass-card glass-card--featured labs-game-card reveal">
+            <span class="glass-card__reflection" aria-hidden="true"></span>
+            <p class="labs-game-card__intro">
+              Bounce the mango through the level, collect every ring, avoid the spikes,
+              and reach the finish. Use <strong>arrow keys</strong> or <strong>A / D</strong>
+              on desktop. On mobile, use the left and right buttons.
+            </p>
+            <p class="labs-game-card__best">
+              Your best: <strong id="mb-high-score">0</strong>
+            </p>
+            <div class="labs-game-actions">
+              <button class="btn btn-copy" id="mb-open-game" type="button">Start game</button>
             </div>
           </div>
         </div>
@@ -137,6 +157,87 @@
               ▼
             </button>
             <button type="button" class="labs-dpad-btn labs-dpad-btn--right" id="ms-right" aria-label="Right">
+              ▶
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="labs-game-modal labs-game-modal--idle" id="mb-game-modal" hidden>
+      <div class="labs-game-modal__panel" role="dialog" aria-modal="true" aria-labelledby="mb-game-modal-title">
+        <button class="labs-game-modal__close" id="mb-close-game" type="button" aria-label="Close game">
+          ✕
+        </button>
+
+        <header class="labs-game-modal__header">
+          <h2 class="labs-game-modal__title" id="mb-game-modal-title">🥭 Bounch</h2>
+          <div class="labs-game-hud">
+            <p><strong id="mb-level-label">Level 1</strong></p>
+            <p>Rings: <strong id="mb-score">0 / 4</strong></p>
+            <p>Best: <strong id="mb-hud-best">0</strong></p>
+          </div>
+        </header>
+
+        <div class="labs-game-stage">
+          <div class="labs-game-wrap labs-bounch-wrap" id="mb-arena">
+            <canvas
+              id="mb-canvas"
+              class="labs-game-canvas"
+              aria-label="Bounch game board"
+              role="img"
+            ></canvas>
+            <div class="labs-game-overlay" id="mb-game-overlay">
+              <p class="labs-game-overlay__message" id="mb-message" role="status" aria-live="polite">
+                Collect every ring, avoid the spikes, reach the finish!
+              </p>
+              <p class="labs-game-overlay__final" id="mb-overlay-score" hidden>
+                Rings: <strong>0</strong>
+              </p>
+              <div class="labs-game-overlay__actions">
+                <button class="btn btn-copy" id="mb-start-play" type="button">Start game</button>
+                <button class="btn btn-solscan" id="mb-restart" type="button" hidden>Try again</button>
+                <button class="btn btn-copy" id="mb-next-level" type="button" hidden>Next level</button>
+                <button class="btn btn-copy" id="mb-play-again" type="button" hidden>Play again</button>
+              </div>
+            </div>
+            <div class="labs-bounch-howto" id="mb-howto" hidden>
+              <div class="labs-bounch-howto__panel">
+                <p class="labs-bounch-howto__title">How to play</p>
+                <ul class="labs-bounch-howto__list">
+                  <li>🥭 Guide the bouncing mango</li>
+                  <li>← → / A D — Move left &amp; right</li>
+                  <li>⭕ Collect all rings</li>
+                  <li>⚠️ Avoid the spikes</li>
+                  <li>🏁 Collect every ring, then reach the finish</li>
+                </ul>
+                <p class="labs-bounch-howto__start labs-bounch-howto__start--desktop">
+                  Press ← or → to start
+                </p>
+                <p class="labs-bounch-howto__start labs-bounch-howto__start--mobile">
+                  Tap ◀ or ▶ to start
+                </p>
+              </div>
+            </div>
+            <div class="labs-bounch-howto" id="mb-level-ready" hidden>
+              <div class="labs-bounch-howto__panel labs-bounch-howto__panel--compact">
+                <p class="labs-bounch-howto__title" id="mb-level-ready-title">Level 2</p>
+                <p class="labs-bounch-howto__text" id="mb-level-ready-text">Ready for a tougher bounce?</p>
+                <p class="labs-bounch-howto__start labs-bounch-howto__start--desktop">
+                  Press ← or → to start
+                </p>
+                <p class="labs-bounch-howto__start labs-bounch-howto__start--mobile">
+                  Tap ◀ or ▶ to start
+                </p>
+              </div>
+            </div>
+          </div>
+
+          <div class="labs-bounch-controls" id="mb-controls" aria-label="Move left or right">
+            <button type="button" class="labs-bounch-btn" id="mb-left" aria-label="Move left">
+              ◀
+            </button>
+            <button type="button" class="labs-bounch-btn" id="mb-right" aria-label="Move right">
               ▶
             </button>
           </div>
