@@ -296,6 +296,16 @@ function runMangoBounch(
   let lastTs = 0;
   let moveLeft = false;
   let moveRight = false;
+  const releaseMobileHolds: Array<() => void> = [];
+
+  function clearMovementInput(): void {
+    moveLeft = false;
+    moveRight = false;
+
+    for (const release of releaseMobileHolds) {
+      release();
+    }
+  }
 
   const arena = cnv.parentElement;
   let platforms: Rect[] = [];
@@ -475,8 +485,7 @@ function runMangoBounch(
 
   function closeGameModal(): void {
     stopLoop();
-    moveLeft = false;
-    moveRight = false;
+    clearMovementInput();
     state = "idle";
     levelIndex = 0;
     gameModal?.setAttribute("hidden", "");
@@ -538,8 +547,7 @@ function runMangoBounch(
 
   function enterReady(): void {
     resetLevel();
-    moveLeft = false;
-    moveRight = false;
+    clearMovementInput();
     state = "ready";
     lastTs = 0;
     setReadyView();
@@ -568,8 +576,7 @@ function runMangoBounch(
     }
 
     state = next;
-    moveLeft = false;
-    moveRight = false;
+    clearMovementInput();
     mango.vx = 0;
     mango.vy = 0;
 
@@ -927,6 +934,16 @@ function runMangoBounch(
   }
 
   function handleDirectionInput(dir: "left" | "right", pressed: boolean): void {
+    // Always allow releases so a direction cannot stick after close/game-over.
+    if (!pressed) {
+      if (dir === "left") {
+        moveLeft = false;
+      } else {
+        moveRight = false;
+      }
+      return;
+    }
+
     if (!isBounchModalOpen()) {
       return;
     }
@@ -936,12 +953,12 @@ function runMangoBounch(
     }
 
     if (dir === "left") {
-      moveLeft = pressed;
+      moveLeft = true;
     } else {
-      moveRight = pressed;
+      moveRight = true;
     }
 
-    if (pressed && state === "ready") {
+    if (state === "ready") {
       beginPlaying();
     }
   }
@@ -951,22 +968,79 @@ function runMangoBounch(
       return;
     }
 
-    const down = (event: Event): void => {
-      event.preventDefault();
-      event.stopPropagation();
-      handleDirectionInput(dir, true);
-    };
+    let activePointerId: number | null = null;
 
-    const up = (event: Event): void => {
-      event.preventDefault();
-      event.stopPropagation();
+    const endHold = (pointerId: number | null = null): void => {
+      if (activePointerId === null) {
+        handleDirectionInput(dir, false);
+        return;
+      }
+
+      if (pointerId !== null && pointerId !== activePointerId) {
+        return;
+      }
+
+      const capturedId = activePointerId;
+      activePointerId = null;
+
+      try {
+        if (btn.hasPointerCapture(capturedId)) {
+          btn.releasePointerCapture(capturedId);
+        }
+      } catch {
+        // ignore capture release failures
+      }
+
       handleDirectionInput(dir, false);
     };
 
-    btn.addEventListener("pointerdown", down);
-    btn.addEventListener("pointerup", up);
-    btn.addEventListener("pointercancel", up);
-    btn.addEventListener("pointerleave", up);
+    releaseMobileHolds.push(() => {
+      endHold();
+    });
+
+    btn.addEventListener("pointerdown", (event: PointerEvent) => {
+      if (event.pointerType === "mouse" && event.button !== 0) {
+        return;
+      }
+
+      event.preventDefault();
+      event.stopPropagation();
+
+      if (activePointerId !== null && activePointerId !== event.pointerId) {
+        return;
+      }
+
+      activePointerId = event.pointerId;
+
+      try {
+        btn.setPointerCapture(event.pointerId);
+      } catch {
+        // capture is best-effort; hold still works via up/cancel
+      }
+
+      handleDirectionInput(dir, true);
+    });
+
+    const onPointerEnd = (event: PointerEvent): void => {
+      if (activePointerId !== null && event.pointerId !== activePointerId) {
+        return;
+      }
+
+      event.preventDefault();
+      event.stopPropagation();
+      endHold(event.pointerId);
+    };
+
+    btn.addEventListener("pointerup", onPointerEnd);
+    btn.addEventListener("pointercancel", onPointerEnd);
+    btn.addEventListener("lostpointercapture", () => {
+      if (activePointerId === null) {
+        return;
+      }
+
+      activePointerId = null;
+      handleDirectionInput(dir, false);
+    });
     btn.addEventListener("click", (event) => {
       event.preventDefault();
       event.stopPropagation();
@@ -981,6 +1055,7 @@ function runMangoBounch(
 
     controls.addEventListener("pointerdown", guard);
     controls.addEventListener("pointerup", guard);
+    controls.addEventListener("pointercancel", guard);
     controls.addEventListener("click", guard);
   }
 
