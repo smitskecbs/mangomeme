@@ -3,6 +3,7 @@
  * Local best level always works; optional API submit on successful clears.
  */
 
+import { resolveBounchContinueLevel } from "./bounchContinue.ts";
 import {
   isBounchHighScoreSharingEnabled,
   submitBounchHighscore,
@@ -909,19 +910,10 @@ function runMangoBounch(
     closeShareModal();
     openGameModal();
     highScore = loadHighScore();
-    levelIndex = 0;
     clearedLevel = 0;
     submitClearToken += 1;
-    resetLevel();
-    state = "idle";
-    lastTs = 0;
-    setIdleOverlay();
-    updateHud();
-    ensureLoop();
-
-    window.requestAnimationFrame(() => {
-      startPlayBtn.focus();
-    });
+    const startLevelId = resolveBounchContinueLevel(highScore, LEVELS.length);
+    goToLevel(startLevelId - 1);
   }
 
   function buildLevel(): void {
@@ -1559,9 +1551,10 @@ function runMangoBounch(
 
   startPlayBtn.addEventListener("click", () => {
     closeShareModal();
-    levelIndex = 0;
+    highScore = loadHighScore();
     clearedLevel = 0;
-    enterReady();
+    const startLevelId = resolveBounchContinueLevel(highScore, LEVELS.length);
+    goToLevel(startLevelId - 1);
   });
 
   openGameBtn?.addEventListener("click", () => {
