@@ -1707,10 +1707,10 @@ body.labs-share-modal-open {
   z-index: 1;
   display: none;
   flex: 0 0 auto;
-  justify-content: space-between;
+  justify-content: center;
   align-items: center;
-  gap: 1.25rem;
-  width: min(100%, 24rem);
+  gap: 1rem;
+  width: min(100%, 22rem);
   max-width: 100%;
   margin: 1rem auto 0;
   padding: 0.85rem 1rem;
@@ -1725,30 +1725,37 @@ body.labs-share-modal-open {
   }
 
   .labs-bounch-controls {
-    width: min(100%, 26rem);
-    margin-top: 0.75rem;
-    margin-bottom: max(0.25rem, env(safe-area-inset-bottom, 0px));
+    margin-top: 1.1rem;
+    margin-bottom: max(0.15rem, env(safe-area-inset-bottom, 0px));
     padding:
-      0.65rem
-      max(0.9rem, env(safe-area-inset-right, 0px))
-      0.85rem
-      max(0.9rem, env(safe-area-inset-left, 0px));
-    gap: clamp(1.25rem, 8vw, 2.75rem);
-    justify-content: space-between;
+      1rem
+      max(1rem, env(safe-area-inset-right, 0px))
+      1rem
+      max(1rem, env(safe-area-inset-left, 0px));
+    gap: 1.75rem;
   }
 
   .labs-bounch-btn {
+    width: 3.5rem;
+    height: 3.5rem;
+    min-width: 3.5rem;
+    min-height: 3.5rem;
+  }
+
+  /* Invisible larger hit zone around the compact arrow button. */
+  .labs-bounch-btn::after {
+    content: "";
+    position: absolute;
+    top: 50%;
+    left: 50%;
     width: 5rem;
     height: 5rem;
-    min-width: 5rem;
-    min-height: 5rem;
-    border-radius: 18px;
-    font-size: 1.45rem;
-    touch-action: none;
+    transform: translate(-50%, -50%);
   }
 }
 
 .labs-bounch-btn {
+  position: relative;
   display: inline-flex;
   align-items: center;
   justify-content: center;
