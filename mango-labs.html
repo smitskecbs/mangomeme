@@ -193,6 +193,13 @@
               <p class="labs-game-overlay__final" id="mb-overlay-score" hidden>
                 Level cleared: <strong>0</strong>
               </p>
+              <p
+                class="labs-game-overlay__share-result"
+                id="mb-api-result"
+                hidden
+                role="status"
+                aria-live="polite"
+              ></p>
               <div class="labs-game-overlay__actions">
                 <button class="btn btn-copy" id="mb-start-play" type="button">Start game</button>
                 <button class="btn btn-solscan" id="mb-restart" type="button" hidden>Try again</button>
@@ -281,6 +288,42 @@
             <p class="labs-highscore-share__result" id="ms-share-result-body"></p>
             <div class="labs-highscore-share__actions">
               <button class="btn btn-copy" id="ms-share-done" type="button">Done</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="labs-share-modal" id="mb-share-modal" hidden>
+      <div class="labs-share-modal__panel" role="dialog" aria-modal="true" aria-labelledby="mb-share-title">
+        <div class="labs-highscore-share" id="mb-highscore-share">
+          <div id="mb-share-form">
+            <p class="labs-highscore-share__title" id="mb-share-title">Share your clear</p>
+            <p class="labs-highscore-share__score">
+              Level: <strong id="mb-share-level">1</strong>
+            </p>
+            <p class="labs-highscore-share__text">
+              Enter a display name once to submit clears to the ManGo Bounch leaderboard.
+            </p>
+            <label class="labs-highscore-share__label" for="mb-player-name">Display name</label>
+            <input
+              class="labs-highscore-share__input"
+              id="mb-player-name"
+              type="text"
+              maxlength="24"
+              placeholder="ManGo Player"
+              autocomplete="nickname"
+              inputmode="text"
+            />
+            <p
+              class="labs-highscore-share__status"
+              id="mb-share-status"
+              role="status"
+              aria-live="polite"
+            ></p>
+            <div class="labs-highscore-share__actions">
+              <button class="btn btn-copy" id="mb-submit-score" type="button">Submit clear</button>
+              <button class="btn btn-solscan" id="mb-skip-score" type="button">Skip</button>
             </div>
           </div>
         </div>

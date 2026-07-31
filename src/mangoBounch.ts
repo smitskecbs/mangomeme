@@ -1,10 +1,21 @@
 /**
  * ManGo Bounch — Bounce-style platformer V1.
- * Local scores only. No API / leaderboard / Telegram.
+ * Local best level always works; optional API submit on successful clears.
  */
+
+import {
+  isBounchHighScoreSharingEnabled,
+  submitBounchHighscore,
+} from "./bounchHighscoreSubmit.ts";
+import {
+  formatBounchScoreResult,
+  isBounchHighscoreApiResponse,
+} from "./bounchScoreResult.ts";
 
 const CONFIG = {
   storageKey: "mango-bounch-best-level",
+  playerNameKey: "mango-bounch-player-name",
+  snakePlayerNameKey: "mango-snake-player-name",
   worldHeight: 420,
   gravity: 1400,
   bounceSpeed: 520,
@@ -361,6 +372,13 @@ export function initMangoBounch(): void {
   const playAgainBtn = document.getElementById("mb-play-again") as HTMLButtonElement | null;
   const titleNode = document.getElementById("mb-game-modal-title");
   const levelLabelNode = document.getElementById("mb-level-label");
+  const apiResultNode = document.getElementById("mb-api-result");
+  const shareModal = document.getElementById("mb-share-modal");
+  const shareLevelNode = document.getElementById("mb-share-level");
+  const shareStatusNode = document.getElementById("mb-share-status");
+  const playerNameInput = document.getElementById("mb-player-name") as HTMLInputElement | null;
+  const submitScoreBtn = document.getElementById("mb-submit-score") as HTMLButtonElement | null;
+  const skipScoreBtn = document.getElementById("mb-skip-score") as HTMLButtonElement | null;
 
   if (!canvas || !scoreNode || !highNode || !msgNode || !restartNode || !startPlayBtn) {
     return;
@@ -395,7 +413,14 @@ export function initMangoBounch(): void {
     nextLevelBtn,
     playAgainBtn,
     titleNode,
-    levelLabelNode
+    levelLabelNode,
+    apiResultNode,
+    shareModal,
+    shareLevelNode,
+    shareStatusNode,
+    playerNameInput,
+    submitScoreBtn,
+    skipScoreBtn
   );
 }
 
@@ -422,7 +447,14 @@ function runMangoBounch(
   nextLevelBtn: HTMLButtonElement | null,
   playAgainBtn: HTMLButtonElement | null,
   titleNode: HTMLElement | null,
-  levelLabelNode: HTMLElement | null
+  levelLabelNode: HTMLElement | null,
+  apiResultNode: HTMLElement | null,
+  shareModal: HTMLElement | null,
+  shareLevelNode: HTMLElement | null,
+  shareStatusNode: HTMLElement | null,
+  playerNameInput: HTMLInputElement | null,
+  submitScoreBtn: HTMLButtonElement | null,
+  skipScoreBtn: HTMLButtonElement | null
 ): void {
   let state: GameState = "idle";
   let levelIndex = 0;
@@ -437,6 +469,10 @@ function runMangoBounch(
   let lastTs = 0;
   let moveLeft = false;
   let moveRight = false;
+  let pendingSubmitLevel = 0;
+  let submitClearToken = 0;
+  let lastSubmittedClearToken = 0;
+  let isSubmittingScore = false;
   const releaseMobileHolds: Array<() => void> = [];
 
   function clearMovementInput(): void {
@@ -496,6 +532,220 @@ function runMangoBounch(
     } catch {
       // ignore storage failures
     }
+  }
+
+  function loadPlayerName(): string {
+    try {
+      const bounchName = localStorage.getItem(CONFIG.playerNameKey)?.trim() || "";
+      if (bounchName) {
+        return bounchName;
+      }
+
+      return localStorage.getItem(CONFIG.snakePlayerNameKey)?.trim() || "";
+    } catch {
+      return "";
+    }
+  }
+
+  function savePlayerName(name: string): void {
+    const trimmed = name.trim();
+    if (!trimmed) {
+      return;
+    }
+
+    try {
+      localStorage.setItem(CONFIG.playerNameKey, trimmed);
+    } catch {
+      // ignore storage failures
+    }
+  }
+
+  function setApiResult(message: string | null): void {
+    if (!apiResultNode) {
+      return;
+    }
+
+    if (!message) {
+      apiResultNode.textContent = "";
+      apiResultNode.hidden = true;
+      return;
+    }
+
+    apiResultNode.textContent = message;
+    apiResultNode.hidden = false;
+  }
+
+  function setShareStatus(message: string, tone: "default" | "success" | "error" = "default"): void {
+    if (!shareStatusNode) {
+      return;
+    }
+
+    shareStatusNode.textContent = message;
+    shareStatusNode.classList.remove(
+      "labs-highscore-share__status--success",
+      "labs-highscore-share__status--error"
+    );
+
+    if (tone === "success") {
+      shareStatusNode.classList.add("labs-highscore-share__status--success");
+    } else if (tone === "error") {
+      shareStatusNode.classList.add("labs-highscore-share__status--error");
+    }
+  }
+
+  function resetShareModal(): void {
+    if (playerNameInput) {
+      playerNameInput.disabled = false;
+      playerNameInput.readOnly = false;
+    }
+
+    if (submitScoreBtn) {
+      submitScoreBtn.disabled = false;
+      submitScoreBtn.textContent = "Submit clear";
+    }
+
+    if (skipScoreBtn) {
+      skipScoreBtn.disabled = false;
+    }
+
+    setShareStatus("");
+  }
+
+  function closeShareModal(): void {
+    shareModal?.setAttribute("hidden", "");
+    document.body.classList.remove("labs-share-modal-open");
+    pendingSubmitLevel = 0;
+    resetShareModal();
+  }
+
+  function openShareModal(levelId: number): void {
+    if (!isBounchHighScoreSharingEnabled() || !shareModal) {
+      return;
+    }
+
+    pendingSubmitLevel = levelId;
+    shareModal.removeAttribute("hidden");
+    document.body.classList.add("labs-share-modal-open");
+    resetShareModal();
+
+    if (shareLevelNode) {
+      shareLevelNode.textContent = String(levelId);
+    }
+
+    if (playerNameInput) {
+      playerNameInput.value = loadPlayerName();
+    }
+
+    window.requestAnimationFrame(() => {
+      playerNameInput?.focus();
+      playerNameInput?.select();
+    });
+  }
+
+  function maybeRaiseLocalBest(apiBestLevel: number): void {
+    if (!Number.isFinite(apiBestLevel) || apiBestLevel <= highScore) {
+      return;
+    }
+
+    const capped = Math.max(0, Math.min(LEVELS.length, Math.floor(apiBestLevel)));
+    if (capped <= highScore) {
+      return;
+    }
+
+    highScore = capped;
+    saveHighScore(highScore);
+    updateHud();
+  }
+
+  async function submitClearedLevel(levelId: number, name: string, clearToken: number): Promise<void> {
+    if (!isBounchHighScoreSharingEnabled()) {
+      return;
+    }
+
+    if (isSubmittingScore || clearToken !== submitClearToken || lastSubmittedClearToken === clearToken) {
+      return;
+    }
+
+    isSubmittingScore = true;
+    lastSubmittedClearToken = clearToken;
+    setApiResult(null);
+
+    const result = await submitBounchHighscore(levelId, name);
+
+    isSubmittingScore = false;
+
+    // Player may already have left this win screen.
+    if (clearToken !== submitClearToken || state !== "won") {
+      return;
+    }
+
+    if (result.ok) {
+      savePlayerName(name);
+
+      if (isBounchHighscoreApiResponse(result.body)) {
+        const bestLevel =
+          typeof result.body.bestLevel === "number" ? result.body.bestLevel : levelId;
+        maybeRaiseLocalBest(bestLevel);
+        setApiResult(formatBounchScoreResult(result.body, levelId));
+        return;
+      }
+
+      setApiResult(`Best: Level ${Math.max(highScore, levelId)}`);
+      return;
+    }
+
+    if (result.skipped) {
+      return;
+    }
+
+    setApiResult("Score sharing unavailable");
+  }
+
+  function scheduleHighscoreSubmit(levelId: number): void {
+    if (!isBounchHighScoreSharingEnabled()) {
+      return;
+    }
+
+    if (levelId < 1 || levelId > LEVELS.length) {
+      return;
+    }
+
+    const clearToken = ++submitClearToken;
+    const name = loadPlayerName();
+
+    if (!name) {
+      openShareModal(levelId);
+      return;
+    }
+
+    void submitClearedLevel(levelId, name, clearToken);
+  }
+
+  async function sharePendingClear(): Promise<void> {
+    if (pendingSubmitLevel <= 0 || isSubmittingScore) {
+      return;
+    }
+
+    const levelId = pendingSubmitLevel;
+    const clearToken = submitClearToken;
+    const name = playerNameInput?.value.trim() || "ManGo Player";
+    pendingSubmitLevel = 0;
+
+    if (submitScoreBtn) {
+      submitScoreBtn.disabled = true;
+    }
+
+    if (skipScoreBtn) {
+      skipScoreBtn.disabled = true;
+    }
+
+    setShareStatus("Submitting clear...");
+    savePlayerName(name);
+    shareModal?.setAttribute("hidden", "");
+    document.body.classList.remove("labs-share-modal-open");
+    resetShareModal();
+
+    await submitClearedLevel(levelId, name, clearToken);
   }
 
   function recordLevelClear(levelId: number): void {
@@ -593,6 +843,7 @@ function runMangoBounch(
     setModalPhase("idle");
     setEndActions("idle");
     setOverlayScore(null);
+    setApiResult(null);
     setNodeVisible(howtoNode, false);
     setNodeVisible(levelReadyNode, false);
     msgNode.textContent = "Collect every ring, avoid the spikes, reach the finish!";
@@ -603,6 +854,7 @@ function runMangoBounch(
     setEndActions("idle");
     startPlayBtn.hidden = true;
     setOverlayScore(null);
+    setApiResult(null);
 
     const level = activeLevel();
     const isFirstLevel = level.id === 1;
@@ -640,9 +892,11 @@ function runMangoBounch(
   function closeGameModal(): void {
     stopLoop();
     clearMovementInput();
+    closeShareModal();
     state = "idle";
     levelIndex = 0;
     clearedLevel = 0;
+    submitClearToken += 1;
     gameModal?.setAttribute("hidden", "");
     document.body.classList.remove("labs-game-modal-open");
     resetLevel();
@@ -652,10 +906,12 @@ function runMangoBounch(
   activeClose = closeGameModal;
 
   function prepareGameModal(): void {
+    closeShareModal();
     openGameModal();
     highScore = loadHighScore();
     levelIndex = 0;
     clearedLevel = 0;
+    submitClearToken += 1;
     resetLevel();
     state = "idle";
     lastTs = 0;
@@ -737,33 +993,33 @@ function runMangoBounch(
     mango.vy = 0;
 
     if (next === "won") {
-      recordLevelClear(activeLevel().id);
+      const clearedId = activeLevel().id;
+      recordLevelClear(clearedId);
+      updateHud();
+
+      const hasNextLevel = levelIndex < LEVELS.length - 1;
+
+      if (hasNextLevel) {
+        setEndOverlay(`${activeLevel().name} complete! 🥭`, "next-level");
+        window.requestAnimationFrame(() => {
+          nextLevelBtn?.focus();
+        });
+      } else {
+        setEndOverlay(`${activeLevel().name} complete! 🥭`, "play-again");
+        window.requestAnimationFrame(() => {
+          playAgainBtn?.focus();
+        });
+      }
+
+      scheduleHighscoreSubmit(clearedId);
+      return;
     }
 
     updateHud();
-
-    if (next === "over") {
-      setEndOverlay(message, "over");
-      window.requestAnimationFrame(() => {
-        restartNode.focus();
-      });
-      return;
-    }
-
-    const level = activeLevel();
-    const hasNextLevel = levelIndex < LEVELS.length - 1;
-
-    if (hasNextLevel) {
-      setEndOverlay(`${level.name} complete! 🥭`, "next-level");
-      window.requestAnimationFrame(() => {
-        nextLevelBtn?.focus();
-      });
-      return;
-    }
-
-    setEndOverlay(`${level.name} complete! 🥭`, "play-again");
+    setApiResult(null);
+    setEndOverlay(message, "over");
     window.requestAnimationFrame(() => {
-      playAgainBtn?.focus();
+      restartNode.focus();
     });
   }
 
@@ -1240,9 +1496,11 @@ function runMangoBounch(
         enterReady();
       } else if (state === "over") {
         event.preventDefault();
+        closeShareModal();
         enterReady();
       } else if (state === "won") {
         event.preventDefault();
+        closeShareModal();
         if (levelIndex < LEVELS.length - 1) {
           goToLevel(levelIndex + 1);
         } else {
@@ -1268,6 +1526,7 @@ function runMangoBounch(
   });
 
   restartNode.addEventListener("click", () => {
+    closeShareModal();
     enterReady();
   });
 
@@ -1280,6 +1539,7 @@ function runMangoBounch(
       return;
     }
 
+    closeShareModal();
     goToLevel(levelIndex + 1);
   });
 
@@ -1292,11 +1552,13 @@ function runMangoBounch(
       return;
     }
 
+    closeShareModal();
     clearedLevel = 0;
     goToLevel(0);
   });
 
   startPlayBtn.addEventListener("click", () => {
+    closeShareModal();
     levelIndex = 0;
     clearedLevel = 0;
     enterReady();
@@ -1308,6 +1570,25 @@ function runMangoBounch(
 
   closeGameBtn?.addEventListener("click", () => {
     closeGameModal();
+  });
+
+  submitScoreBtn?.addEventListener("click", () => {
+    void sharePendingClear();
+  });
+
+  skipScoreBtn?.addEventListener("click", () => {
+    if (isSubmittingScore) {
+      return;
+    }
+
+    closeShareModal();
+  });
+
+  playerNameInput?.addEventListener("keydown", (event) => {
+    if (event.key === "Enter") {
+      event.preventDefault();
+      void sharePendingClear();
+    }
   });
 
   const resizeObserver = new ResizeObserver(() => {
