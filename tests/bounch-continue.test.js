@@ -6,7 +6,7 @@
 import assert from "node:assert/strict";
 import { resolveBounchContinueLevel } from "../src/bounchContinue.ts";
 
-const LEVEL_COUNT = 5;
+const LEVEL_COUNT = 7;
 
 function runTest(name, fn) {
   try {
@@ -38,8 +38,16 @@ runTest("best 4 → Level 5", () => {
   assert.equal(resolveBounchContinueLevel(4, LEVEL_COUNT), 5);
 });
 
-runTest("best 5 → Level 5", () => {
-  assert.equal(resolveBounchContinueLevel(5, LEVEL_COUNT), 5);
+runTest("best 5 → Level 6", () => {
+  assert.equal(resolveBounchContinueLevel(5, LEVEL_COUNT), 6);
+});
+
+runTest("best 6 → Level 7", () => {
+  assert.equal(resolveBounchContinueLevel(6, LEVEL_COUNT), 7);
+});
+
+runTest("best 7 → Level 7", () => {
+  assert.equal(resolveBounchContinueLevel(7, LEVEL_COUNT), 7);
 });
 
 runTest("missing / null → Level 1", () => {
@@ -55,14 +63,20 @@ runTest("invalid / NaN → Level 1", () => {
   assert.equal(resolveBounchContinueLevel(-3.5, LEVEL_COUNT), 1);
 });
 
-runTest("too high → clamp to Level 5", () => {
-  assert.equal(resolveBounchContinueLevel(6, LEVEL_COUNT), 5);
-  assert.equal(resolveBounchContinueLevel(99, LEVEL_COUNT), 5);
-  assert.equal(resolveBounchContinueLevel("12", LEVEL_COUNT), 5);
+runTest("too high → clamp to Level 7", () => {
+  assert.equal(resolveBounchContinueLevel(8, LEVEL_COUNT), 7);
+  assert.equal(resolveBounchContinueLevel(99, LEVEL_COUNT), 7);
+  assert.equal(resolveBounchContinueLevel("12", LEVEL_COUNT), 7);
 });
 
 runTest("string numeric best is accepted", () => {
   assert.equal(resolveBounchContinueLevel("3", LEVEL_COUNT), 4);
+});
+
+runTest("helper follows levelCount (5-level world still clamps)", () => {
+  assert.equal(resolveBounchContinueLevel(5, 5), 5);
+  assert.equal(resolveBounchContinueLevel(4, 5), 5);
+  assert.equal(resolveBounchContinueLevel(6, 5), 5);
 });
 
 console.log("All bounch continue tests passed.");
