@@ -9,14 +9,17 @@ import {
   submitBounchHighscore,
 } from "./bounchHighscoreSubmit.ts";
 import {
+  BOUNCH_PLAYER_NAME_KEY,
+  validateBounchPlayerName,
+} from "./bounchPlayerName.ts";
+import {
   formatBounchScoreResult,
   isBounchHighscoreApiResponse,
 } from "./bounchScoreResult.ts";
 
 const CONFIG = {
   storageKey: "mango-bounch-best-level",
-  playerNameKey: "mango-bounch-player-name",
-  snakePlayerNameKey: "mango-snake-player-name",
+  playerNameKey: BOUNCH_PLAYER_NAME_KEY,
   worldHeight: 420,
   gravity: 1400,
   bounceSpeed: 520,
@@ -39,7 +42,7 @@ const CONFIG = {
   },
 } as const;
 
-type GameState = "idle" | "ready" | "playing" | "won" | "over";
+type GameState = "idle" | "naming" | "ready" | "playing" | "won" | "over";
 
 interface Rect {
   x: number;
@@ -550,6 +553,14 @@ export function initMangoBounch(): void {
   const levelReadyNode = document.getElementById("mb-level-ready");
   const levelReadyTitleNode = document.getElementById("mb-level-ready-title");
   const levelReadyTextNode = document.getElementById("mb-level-ready-text");
+  const nameSetupNode = document.getElementById("mb-name-setup");
+  const setupPlayerNameInput = document.getElementById(
+    "mb-setup-player-name"
+  ) as HTMLInputElement | null;
+  const savePlayerNameBtn = document.getElementById(
+    "mb-save-player-name"
+  ) as HTMLButtonElement | null;
+  const nameSetupStatusNode = document.getElementById("mb-name-setup-status");
   const nextLevelBtn = document.getElementById("mb-next-level") as HTMLButtonElement | null;
   const playAgainBtn = document.getElementById("mb-play-again") as HTMLButtonElement | null;
   const titleNode = document.getElementById("mb-game-modal-title");
@@ -592,6 +603,10 @@ export function initMangoBounch(): void {
     levelReadyNode,
     levelReadyTitleNode,
     levelReadyTextNode,
+    nameSetupNode,
+    setupPlayerNameInput,
+    savePlayerNameBtn,
+    nameSetupStatusNode,
     nextLevelBtn,
     playAgainBtn,
     titleNode,
@@ -626,6 +641,10 @@ function runMangoBounch(
   levelReadyNode: HTMLElement | null,
   levelReadyTitleNode: HTMLElement | null,
   levelReadyTextNode: HTMLElement | null,
+  nameSetupNode: HTMLElement | null,
+  setupPlayerNameInput: HTMLInputElement | null,
+  savePlayerNameBtn: HTMLButtonElement | null,
+  nameSetupStatusNode: HTMLElement | null,
   nextLevelBtn: HTMLButtonElement | null,
   playAgainBtn: HTMLButtonElement | null,
   titleNode: HTMLElement | null,
@@ -718,28 +737,40 @@ function runMangoBounch(
 
   function loadPlayerName(): string {
     try {
-      const bounchName = localStorage.getItem(CONFIG.playerNameKey)?.trim() || "";
-      if (bounchName) {
-        return bounchName;
-      }
-
-      return localStorage.getItem(CONFIG.snakePlayerNameKey)?.trim() || "";
+      const raw = localStorage.getItem(CONFIG.playerNameKey) || "";
+      const validated = validateBounchPlayerName(raw);
+      return validated.ok ? validated.name : "";
     } catch {
       return "";
     }
   }
 
+  function hasValidSavedPlayerName(): boolean {
+    return loadPlayerName().length > 0;
+  }
+
   function savePlayerName(name: string): void {
-    const trimmed = name.trim();
-    if (!trimmed) {
+    const validated = validateBounchPlayerName(name);
+    if (!validated.ok) {
       return;
     }
 
     try {
-      localStorage.setItem(CONFIG.playerNameKey, trimmed);
+      localStorage.setItem(CONFIG.playerNameKey, validated.name);
     } catch {
       // ignore storage failures
     }
+  }
+
+  function setNameSetupStatus(message: string): void {
+    if (nameSetupStatusNode) {
+      nameSetupStatusNode.textContent = message;
+    }
+  }
+
+  function hideNameSetup(): void {
+    setNodeVisible(nameSetupNode, false);
+    setNameSetupStatus("");
   }
 
   function setApiResult(message: string | null): void {
@@ -1026,9 +1057,31 @@ function runMangoBounch(
     setEndActions("idle");
     setOverlayScore(null);
     setApiResult(null);
+    hideNameSetup();
     setNodeVisible(howtoNode, false);
     setNodeVisible(levelReadyNode, false);
     msgNode.textContent = "Collect every ring, avoid the spikes, reach the finish!";
+  }
+
+  function setNamingView(): void {
+    setModalPhase("playing");
+    setEndActions("idle");
+    startPlayBtn.hidden = true;
+    setOverlayScore(null);
+    setApiResult(null);
+    setNodeVisible(howtoNode, false);
+    setNodeVisible(levelReadyNode, false);
+    setNodeVisible(nameSetupNode, true);
+    setNameSetupStatus("");
+
+    if (setupPlayerNameInput) {
+      setupPlayerNameInput.value = "";
+      setupPlayerNameInput.disabled = false;
+    }
+
+    if (savePlayerNameBtn) {
+      savePlayerNameBtn.disabled = false;
+    }
   }
 
   function setReadyView(): void {
@@ -1037,6 +1090,7 @@ function runMangoBounch(
     startPlayBtn.hidden = true;
     setOverlayScore(null);
     setApiResult(null);
+    hideNameSetup();
 
     const level = activeLevel();
     const isFirstLevel = level.id === 1;
@@ -1058,6 +1112,7 @@ function runMangoBounch(
     setModalPhase("over");
     setEndActions(mode);
     setOverlayScore(clearedLevel);
+    hideNameSetup();
     setNodeVisible(howtoNode, false);
     setNodeVisible(levelReadyNode, false);
     msgNode.textContent = message;
@@ -1075,6 +1130,7 @@ function runMangoBounch(
     stopLoop();
     clearMovementInput();
     closeShareModal();
+    hideNameSetup();
     state = "idle";
     levelIndex = 0;
     clearedLevel = 0;
@@ -1087,14 +1143,25 @@ function runMangoBounch(
 
   activeClose = closeGameModal;
 
-  function prepareGameModal(): void {
-    closeShareModal();
-    openGameModal();
+  function beginContinueSession(): void {
     highScore = loadHighScore();
     clearedLevel = 0;
     submitClearToken += 1;
     const startLevelId = resolveBounchContinueLevel(highScore, LEVELS.length);
-    goToLevel(startLevelId - 1);
+    levelIndex = Math.max(0, Math.min(LEVELS.length - 1, startLevelId - 1));
+
+    if (!hasValidSavedPlayerName()) {
+      enterNaming();
+      return;
+    }
+
+    goToLevel(levelIndex);
+  }
+
+  function prepareGameModal(): void {
+    closeShareModal();
+    openGameModal();
+    beginContinueSession();
   }
 
   function buildLevel(): void {
@@ -1130,6 +1197,42 @@ function runMangoBounch(
     updateCamera();
   }
 
+  function enterNaming(): void {
+    resetLevel();
+    clearMovementInput();
+    state = "naming";
+    lastTs = 0;
+    setNamingView();
+    ensureLoop();
+    window.requestAnimationFrame(() => {
+      setupPlayerNameInput?.focus();
+    });
+  }
+
+  function submitSetupPlayerName(): void {
+    if (state !== "naming") {
+      return;
+    }
+
+    const raw = setupPlayerNameInput?.value ?? "";
+    const validated = validateBounchPlayerName(raw);
+
+    if (!validated.ok) {
+      setNameSetupStatus(validated.error);
+      setupPlayerNameInput?.focus();
+      return;
+    }
+
+    savePlayerName(validated.name);
+
+    if (setupPlayerNameInput) {
+      setupPlayerNameInput.value = validated.name;
+    }
+
+    hideNameSetup();
+    enterReady();
+  }
+
   function enterReady(): void {
     resetLevel();
     clearMovementInput();
@@ -1151,6 +1254,7 @@ function runMangoBounch(
 
     state = "playing";
     lastTs = 0;
+    hideNameSetup();
     setNodeVisible(howtoNode, false);
     setNodeVisible(levelReadyNode, false);
   }
@@ -1532,7 +1636,7 @@ function runMangoBounch(
       return;
     }
 
-    if (state === "over" || state === "won" || state === "idle") {
+    if (state === "over" || state === "won" || state === "idle" || state === "naming") {
       return;
     }
 
@@ -1651,6 +1755,10 @@ function runMangoBounch(
       return;
     }
 
+    if (state === "naming") {
+      return;
+    }
+
     if (event.code === "ArrowLeft" || event.code === "KeyA") {
       event.preventDefault();
       handleDirectionInput("left", true);
@@ -1666,7 +1774,7 @@ function runMangoBounch(
     if (event.code === "Space") {
       if (state === "idle") {
         event.preventDefault();
-        enterReady();
+        beginContinueSession();
       } else if (state === "over") {
         event.preventDefault();
         closeShareModal();
@@ -1732,10 +1840,7 @@ function runMangoBounch(
 
   startPlayBtn.addEventListener("click", () => {
     closeShareModal();
-    highScore = loadHighScore();
-    clearedLevel = 0;
-    const startLevelId = resolveBounchContinueLevel(highScore, LEVELS.length);
-    goToLevel(startLevelId - 1);
+    beginContinueSession();
   });
 
   openGameBtn?.addEventListener("click", () => {
@@ -1744,6 +1849,17 @@ function runMangoBounch(
 
   closeGameBtn?.addEventListener("click", () => {
     closeGameModal();
+  });
+
+  savePlayerNameBtn?.addEventListener("click", () => {
+    submitSetupPlayerName();
+  });
+
+  setupPlayerNameInput?.addEventListener("keydown", (event) => {
+    if (event.key === "Enter") {
+      event.preventDefault();
+      submitSetupPlayerName();
+    }
   });
 
   submitScoreBtn?.addEventListener("click", () => {

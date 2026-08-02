@@ -207,6 +207,34 @@
                 <button class="btn btn-copy" id="mb-play-again" type="button" hidden>Play again</button>
               </div>
             </div>
+            <div class="labs-bounch-howto labs-bounch-name-setup" id="mb-name-setup" hidden>
+              <div class="labs-bounch-howto__panel labs-bounch-name-setup__panel">
+                <p class="labs-bounch-howto__title" id="mb-name-setup-title">Choose your Bounch name</p>
+                <p class="labs-bounch-howto__text">
+                  This name will be used for your levels and leaderboard.
+                </p>
+                <label class="labs-bounch-name-setup__label" for="mb-setup-player-name">Your name</label>
+                <input
+                  class="labs-bounch-name-setup__input"
+                  id="mb-setup-player-name"
+                  type="text"
+                  maxlength="24"
+                  placeholder="Your name"
+                  autocomplete="nickname"
+                  inputmode="text"
+                  enterkeyhint="done"
+                />
+                <p
+                  class="labs-bounch-name-setup__status"
+                  id="mb-name-setup-status"
+                  role="status"
+                  aria-live="polite"
+                ></p>
+                <button class="btn btn-copy labs-bounch-name-setup__submit" id="mb-save-player-name" type="button">
+                  Save &amp; play
+                </button>
+              </div>
+            </div>
             <div class="labs-bounch-howto" id="mb-howto" hidden>
               <div class="labs-bounch-howto__panel">
                 <p class="labs-bounch-howto__title">How to play</p>

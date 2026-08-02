@@ -1644,6 +1644,65 @@ body.labs-share-modal-open {
   display: none;
 }
 
+.labs-bounch-name-setup {
+  pointer-events: auto;
+  z-index: 5;
+}
+
+.labs-bounch-name-setup__panel {
+  width: min(100%, 17.5rem);
+  pointer-events: auto;
+}
+
+.labs-bounch-name-setup__label {
+  display: block;
+  margin: 0 0 0.35rem;
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: rgba(232, 246, 255, 0.88);
+  text-align: left;
+}
+
+.labs-bounch-name-setup__input {
+  display: block;
+  width: 100%;
+  box-sizing: border-box;
+  margin: 0 0 0.55rem;
+  padding: 0.7rem 0.8rem;
+  border-radius: 10px;
+  border: 1px solid rgba(255, 255, 255, 0.22);
+  background: rgba(7, 42, 58, 0.95);
+  color: #f4fbff;
+  font-size: 1rem;
+  line-height: 1.3;
+  -webkit-appearance: none;
+  appearance: none;
+}
+
+.labs-bounch-name-setup__input:focus {
+  outline: 2px solid rgba(255, 179, 71, 0.7);
+  outline-offset: 1px;
+  border-color: rgba(255, 179, 71, 0.55);
+}
+
+.labs-bounch-name-setup__input::placeholder {
+  color: rgba(232, 246, 255, 0.45);
+}
+
+.labs-bounch-name-setup__status {
+  min-height: 1.2em;
+  margin: 0 0 0.65rem;
+  font-size: 0.82rem;
+  line-height: 1.35;
+  color: #ffb4c4;
+  text-align: left;
+}
+
+.labs-bounch-name-setup__submit {
+  width: 100%;
+  justify-content: center;
+}
+
 .labs-bounch-howto__panel {
   width: min(100%, 18.5rem);
   padding: 0.9rem 1rem 1rem;
