@@ -109,6 +109,18 @@
           </div>
         </div>
       </section>
+
+      <section class="chapter chapter-labs" id="mango-achievements">
+        <div class="chapter-inner chapter-inner--labs">
+          <p class="chapter-label chapter-label--compact reveal">🏆 Achievements</p>
+          <div class="labs-achievements reveal">
+            <p class="labs-achievements__intro">
+              Unlock badges by playing ManGo Snake and Bounch. Progress stays on this device.
+            </p>
+            <div class="labs-achievements__grid" id="ma-gallery"></div>
+          </div>
+        </div>
+      </section>
     </main>
 
     <div class="labs-game-modal labs-game-modal--idle" id="ms-game-modal" hidden>
@@ -121,6 +133,10 @@
           <h2 class="labs-game-modal__title" id="ms-game-modal-title">🥭 ManGo Snake</h2>
           <div class="labs-game-hud">
             <p>Score: <strong id="ms-score">0</strong></p>
+            <div class="labs-game-session-controls" aria-label="Session controls">
+              <button type="button" class="labs-session-btn" id="ms-pause" hidden>⏸ Pause</button>
+              <button type="button" class="labs-session-btn labs-session-btn--stop" id="ms-stop" hidden>■ Stop</button>
+            </div>
           </div>
         </header>
 
@@ -132,6 +148,9 @@
               aria-label="ManGo Snake game board"
               role="img"
             ></canvas>
+            <div class="labs-game-pause" id="ms-pause-overlay" hidden>
+              <p class="labs-game-pause__label">Paused</p>
+            </div>
             <div class="labs-game-overlay" id="ms-game-overlay">
               <p class="labs-game-overlay__message" id="ms-message" role="status" aria-live="polite">
                 Eat mangos. Stay inside the border!
@@ -175,6 +194,11 @@
           <div class="labs-game-hud">
             <p>Level: <strong id="mb-score">1</strong></p>
             <p>Best: <strong id="mb-hud-best">0</strong></p>
+            <div class="labs-game-session-controls" aria-label="Session controls">
+              <button type="button" class="labs-session-btn" id="mb-pause" hidden>⏸ Pause</button>
+              <button type="button" class="labs-session-btn labs-session-btn--stop" id="mb-stop" hidden>■ Stop</button>
+              <button type="button" class="labs-session-btn" id="mb-levels" hidden>Levels</button>
+            </div>
           </div>
         </header>
 
@@ -186,6 +210,21 @@
               aria-label="Bounch game board"
               role="img"
             ></canvas>
+            <div class="labs-game-pause" id="mb-pause-overlay" hidden>
+              <p class="labs-game-pause__label">Paused</p>
+            </div>
+            <div class="labs-bounch-levels" id="mb-level-select" hidden>
+              <div
+                class="labs-bounch-levels__panel"
+                role="dialog"
+                aria-modal="true"
+                aria-labelledby="mb-level-select-title"
+              >
+                <p class="labs-bounch-levels__title" id="mb-level-select-title">Levels</p>
+                <div class="labs-bounch-levels__grid" id="mb-level-select-grid"></div>
+                <button class="btn btn-solscan" id="mb-level-select-close" type="button">Close</button>
+              </div>
+            </div>
             <div class="labs-game-overlay" id="mb-game-overlay">
               <p class="labs-game-overlay__message" id="mb-message" role="status" aria-live="polite">
                 Collect every ring, avoid the spikes, reach the finish!
@@ -354,6 +393,26 @@
               <button class="btn btn-solscan" id="mb-skip-score" type="button">Skip</button>
             </div>
           </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="labs-achievement-toast" id="ma-toast" hidden>
+      <div
+        class="labs-achievement-toast__panel"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="ma-toast-heading"
+      >
+        <p class="labs-achievement-toast__eyebrow" id="ma-toast-heading">Achievement unlocked!</p>
+        <p class="labs-achievement-toast__title">
+          <span class="labs-achievement-toast__icon" id="ma-toast-icon" aria-hidden="true"></span>
+          <span id="ma-toast-title"></span>
+        </p>
+        <p class="labs-achievement-toast__desc" id="ma-toast-desc"></p>
+        <div class="labs-achievement-toast__actions">
+          <button class="btn btn-copy" id="ma-toast-share" type="button">Share on X</button>
+          <button class="btn btn-solscan" id="ma-toast-close" type="button">Close</button>
         </div>
       </div>
     </div>

@@ -6,6 +6,16 @@ import {
   formatSnakeScoreResult,
   isSnakeHighscoreApiResponse,
 } from "./snakeScoreResult.ts";
+import { snakeAchievementsForRun, unlockAchievements } from "./mangoAchievements.ts";
+import {
+  canStopSnakeRun,
+  canToggleSnakePause,
+  snakePauseButtonLabel,
+  snakeStateAfterPauseToggle,
+  snakeStateAfterStop,
+  shouldShowSnakeSessionControls,
+  type SnakeSessionState,
+} from "./snakeSessionControls.ts";
 
 const CONFIG = {
   gridCells: 18,
@@ -38,7 +48,7 @@ const CONFIG = {
   },
 } as const;
 
-type GameState = "idle" | "playing" | "ending" | "over";
+type GameState = SnakeSessionState;
 type DeathReason = "wall" | "self";
 type Direction = "up" | "down" | "left" | "right";
 
@@ -88,6 +98,9 @@ export function initMangoSnake(): void {
   const submitScoreBtn = document.getElementById("ms-submit-score") as HTMLButtonElement | null;
   const skipScoreBtn = document.getElementById("ms-skip-score") as HTMLButtonElement | null;
   const shareDoneBtn = document.getElementById("ms-share-done") as HTMLButtonElement | null;
+  const pauseBtn = document.getElementById("ms-pause") as HTMLButtonElement | null;
+  const stopBtn = document.getElementById("ms-stop") as HTMLButtonElement | null;
+  const pauseOverlay = document.getElementById("ms-pause-overlay");
 
   if (!canvas || !scoreNode || !highNode || !msgNode || !restartNode || !startPlayBtn) {
     return;
@@ -122,6 +135,9 @@ export function initMangoSnake(): void {
     submitScoreBtn,
     skipScoreBtn,
     shareDoneBtn,
+    pauseBtn,
+    stopBtn,
+    pauseOverlay,
     document.getElementById("ms-dpad"),
     document.getElementById("ms-up"),
     document.getElementById("ms-down"),
@@ -153,6 +169,9 @@ function runMangoSnake(
   submitScoreBtn: HTMLButtonElement | null,
   skipScoreBtn: HTMLButtonElement | null,
   shareDoneBtn: HTMLButtonElement | null,
+  pauseBtn: HTMLButtonElement | null,
+  stopBtn: HTMLButtonElement | null,
+  pauseOverlay: HTMLElement | null,
   dpad: HTMLElement | null,
   upBtn: HTMLElement | null,
   downBtn: HTMLElement | null,
@@ -279,6 +298,8 @@ function runMangoSnake(
     restartNode.hidden = true;
     setOverlayScore(null);
     msgNode.textContent = "Eat mangos. Stay inside the border!";
+    hidePauseOverlay();
+    updateSessionControls();
   }
 
   function setPlayingOverlay(): void {
@@ -286,6 +307,8 @@ function runMangoSnake(
     startPlayBtn.hidden = true;
     restartNode.hidden = true;
     setOverlayScore(null);
+    hidePauseOverlay();
+    updateSessionControls();
   }
 
   function setGameOverOverlay(message: string): void {
@@ -294,6 +317,99 @@ function runMangoSnake(
     restartNode.hidden = false;
     setOverlayScore(score);
     msgNode.textContent = message;
+    hidePauseOverlay();
+    updateSessionControls();
+  }
+
+  function hidePauseOverlay(): void {
+    pauseOverlay?.setAttribute("hidden", "");
+  }
+
+  function showPauseOverlay(): void {
+    pauseOverlay?.removeAttribute("hidden");
+  }
+
+  function updateSessionControls(): void {
+    const show = shouldShowSnakeSessionControls(state);
+
+    if (pauseBtn) {
+      pauseBtn.hidden = !show;
+      pauseBtn.textContent = snakePauseButtonLabel(state);
+    }
+
+    if (stopBtn) {
+      stopBtn.hidden = !show;
+    }
+  }
+
+  function pauseSnakeRun(): void {
+    if (!canToggleSnakePause(state) || state !== "playing") {
+      return;
+    }
+
+    const next = snakeStateAfterPauseToggle(state);
+
+    if (next !== "paused") {
+      return;
+    }
+
+    state = "paused";
+    lastTick = 0;
+    keys.clear();
+    showPauseOverlay();
+    updateSessionControls();
+  }
+
+  function resumeSnakeRun(): void {
+    if (state !== "paused") {
+      return;
+    }
+
+    const next = snakeStateAfterPauseToggle(state);
+
+    if (next !== "playing") {
+      return;
+    }
+
+    state = "playing";
+    lastTick = 0;
+    hidePauseOverlay();
+    updateSessionControls();
+  }
+
+  function toggleSnakePause(): void {
+    if (state === "playing") {
+      pauseSnakeRun();
+      return;
+    }
+
+    if (state === "paused") {
+      resumeSnakeRun();
+    }
+  }
+
+  /** Abort the current attempt without game-over, submit, or achievements. */
+  function stopSnakeRun(): void {
+    if (!canStopSnakeRun(state) || snakeStateAfterStop(state) !== "idle") {
+      return;
+    }
+
+    if (endTimeoutId) {
+      window.clearTimeout(endTimeoutId);
+      endTimeoutId = 0;
+    }
+
+    clearArenaEffects();
+    closeShareModal();
+    keys.clear();
+    resetSnake();
+    state = "idle";
+    lastTick = 0;
+    setIdleOverlay();
+
+    window.requestAnimationFrame(() => {
+      startPlayBtn.focus();
+    });
   }
 
   function openGameModal(): void {
@@ -338,7 +454,9 @@ function runMangoSnake(
     clearArenaEffects();
     closeShareModal();
     closeGameModal();
+    keys.clear();
     state = "idle";
+    lastTick = 0;
     setIdleOverlay();
     startPlayBtn.hidden = false;
     restartNode.hidden = true;
@@ -538,6 +656,8 @@ function runMangoSnake(
       saveHighScore(highScore);
     }
 
+    unlockAchievements(snakeAchievementsForRun(score));
+
     msgNode.textContent = message;
     setGameOverOverlay(message);
     updateHud();
@@ -621,6 +741,8 @@ function runMangoSnake(
     }
 
     state = "ending";
+    hidePauseOverlay();
+    updateSessionControls();
 
     if (reason === "wall") {
       clearArenaEffects();
@@ -692,7 +814,7 @@ function runMangoSnake(
       return;
     }
 
-    if (state !== "playing") {
+    if (state === "paused" || state !== "playing") {
       return;
     }
 
@@ -1040,6 +1162,8 @@ function runMangoSnake(
         lastTick = timestamp;
         step(timestamp);
       }
+    } else if (state === "paused") {
+      lastTick = 0;
     }
 
     draw(timestamp);
@@ -1157,6 +1281,12 @@ function runMangoSnake(
       return;
     }
 
+    if (event.code === "KeyP" && canToggleSnakePause(state)) {
+      event.preventDefault();
+      toggleSnakePause();
+      return;
+    }
+
     const dir = directionFromKey(event.code);
 
     if (state === "over" && dir) {
@@ -1197,6 +1327,14 @@ function runMangoSnake(
 
   startPlayBtn.addEventListener("click", () => {
     startGame();
+  });
+
+  pauseBtn?.addEventListener("click", () => {
+    toggleSnakePause();
+  });
+
+  stopBtn?.addEventListener("click", () => {
+    stopSnakeRun();
   });
 
   openGameBtn?.addEventListener("click", () => {

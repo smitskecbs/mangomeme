@@ -1,0 +1,246 @@
+/**
+ * Tests for ManGo Labs Achievements V1 (pure storage + unlock helpers).
+ * Run with: node tests/mango-achievements.test.js
+ */
+
+import assert from "node:assert/strict";
+import {
+  ACHIEVEMENTS,
+  ACHIEVEMENTS_STORAGE_KEY,
+  LABS_PAGE_URL,
+  bounchAchievementForLevelClear,
+  buildAchievementShareText,
+  buildAchievementShareUrl,
+  getAchievementById,
+  getUnlockedAchievements,
+  isAchievementUnlocked,
+  loadAchievementsMap,
+  parseAchievementsStorage,
+  snakeAchievementsForRun,
+  unlockAchievement,
+  unlockAchievements,
+} from "../src/mangoAchievements.ts";
+
+function runTest(name, fn) {
+  try {
+    fn();
+    console.log(`✓ ${name}`);
+  } catch (error) {
+    console.error(`✗ ${name}`);
+    throw error;
+  }
+}
+
+function createMemoryStorage(initial = {}) {
+  const data = { ...initial };
+
+  return {
+    getItem(key) {
+      return Object.prototype.hasOwnProperty.call(data, key) ? data[key] : null;
+    },
+    setItem(key, value) {
+      data[key] = String(value);
+    },
+    _data: data,
+  };
+}
+
+runTest("lege storage", () => {
+  const storage = createMemoryStorage();
+  assert.deepEqual(loadAchievementsMap(storage), {});
+  assert.deepEqual(getUnlockedAchievements(storage), []);
+  assert.equal(isAchievementUnlocked("snake-first-game", storage), false);
+});
+
+runTest("eerste unlock", () => {
+  const storage = createMemoryStorage();
+  const unlocked = unlockAchievement("snake-first-game", {
+    storage,
+    now: 1000,
+    notify: false,
+  });
+
+  assert.equal(unlocked?.id, "snake-first-game");
+  assert.equal(isAchievementUnlocked("snake-first-game", storage), true);
+  assert.equal(getUnlockedAchievements(storage).length, 1);
+  assert.equal(getUnlockedAchievements(storage)[0].unlockedAt, 1000);
+
+  const raw = storage.getItem(ACHIEVEMENTS_STORAGE_KEY);
+  assert.ok(raw);
+  assert.match(raw, /snake-first-game/);
+});
+
+runTest("dubbele unlock geeft geen nieuwe notification", () => {
+  const storage = createMemoryStorage();
+  const first = unlockAchievement("snake-score-100", { storage, now: 1, notify: false });
+  const second = unlockAchievement("snake-score-100", { storage, now: 2, notify: false });
+
+  assert.ok(first);
+  assert.equal(second, null);
+  assert.equal(getUnlockedAchievements(storage).length, 1);
+  assert.equal(loadAchievementsMap(storage)["snake-score-100"].unlockedAt, 1);
+});
+
+runTest("meerdere unlocks", () => {
+  const storage = createMemoryStorage();
+  const newly = unlockAchievements(["snake-first-game", "snake-score-100", "snake-score-500"], {
+    storage,
+    now: 42,
+    notify: false,
+  });
+
+  assert.deepEqual(
+    newly.map((item) => item.id),
+    ["snake-first-game", "snake-score-100", "snake-score-500"]
+  );
+  assert.equal(getUnlockedAchievements(storage).length, 3);
+});
+
+runTest("corrupte storage", () => {
+  assert.deepEqual(parseAchievementsStorage(null), {});
+  assert.deepEqual(parseAchievementsStorage(""), {});
+  assert.deepEqual(parseAchievementsStorage("not-json"), {});
+  assert.deepEqual(parseAchievementsStorage("[]"), {});
+  assert.deepEqual(parseAchievementsStorage("null"), {});
+  assert.deepEqual(parseAchievementsStorage('{"snake-first-game":"bad"}'), {});
+  assert.deepEqual(parseAchievementsStorage('{"snake-first-game":{"unlockedAt":"nope"}}'), {});
+
+  const storage = createMemoryStorage({
+    [ACHIEVEMENTS_STORAGE_KEY]: "{broken",
+  });
+  assert.deepEqual(loadAchievementsMap(storage), {});
+
+  const ok = unlockAchievement("snake-first-game", { storage, now: 5, notify: false });
+  assert.equal(ok?.id, "snake-first-game");
+});
+
+runTest("onbekende achievement-id wordt genegeerd", () => {
+  const storage = createMemoryStorage();
+  assert.equal(unlockAchievement("not-a-real-id", { storage, notify: false }), null);
+  assert.deepEqual(
+    unlockAchievements(["ghost", "snake-first-game", "also-fake"], {
+      storage,
+      now: 9,
+      notify: false,
+    }).map((item) => item.id),
+    ["snake-first-game"]
+  );
+  assert.equal(getAchievementById("ghost"), undefined);
+});
+
+runTest("Snake score 99 → alleen First Snake Run", () => {
+  assert.deepEqual(snakeAchievementsForRun(99), ["snake-first-game"]);
+});
+
+runTest("Snake score 100 → Starter", () => {
+  assert.deepEqual(snakeAchievementsForRun(100), ["snake-first-game", "snake-score-100"]);
+});
+
+runTest("Snake score 499 → geen Climber", () => {
+  assert.deepEqual(snakeAchievementsForRun(499), ["snake-first-game", "snake-score-100"]);
+});
+
+runTest("Snake score 500 → Starter + Climber", () => {
+  assert.deepEqual(snakeAchievementsForRun(500), [
+    "snake-first-game",
+    "snake-score-100",
+    "snake-score-500",
+  ]);
+});
+
+runTest("Snake score 1499 → geen Master", () => {
+  assert.deepEqual(snakeAchievementsForRun(1499), [
+    "snake-first-game",
+    "snake-score-100",
+    "snake-score-500",
+  ]);
+});
+
+runTest("Snake score 1500 of 2000 → Starter + Climber + Master", () => {
+  const expected = [
+    "snake-first-game",
+    "snake-score-100",
+    "snake-score-500",
+    "snake-score-1500",
+  ];
+  assert.deepEqual(snakeAchievementsForRun(1500), expected);
+  assert.deepEqual(snakeAchievementsForRun(2000), expected);
+});
+
+runTest("één run kan meerdere nieuwe achievements ontgrendelen", () => {
+  const storage = createMemoryStorage();
+  const ids = snakeAchievementsForRun(2000);
+  const newly = unlockAchievements(ids, { storage, now: 7, notify: false });
+  assert.deepEqual(
+    newly.map((item) => item.id),
+    ["snake-first-game", "snake-score-100", "snake-score-500", "snake-score-1500"]
+  );
+
+  const again = unlockAchievements(ids, { storage, now: 8, notify: false });
+  assert.deepEqual(again, []);
+});
+
+runTest("Bounch Level 1 clear → juiste achievement", () => {
+  assert.equal(bounchAchievementForLevelClear(1), "bounch-level-1");
+});
+
+runTest("Level 2 clear → geen nieuw level-achievement", () => {
+  assert.equal(bounchAchievementForLevelClear(2), null);
+});
+
+runTest("Level 3/5/7 → juiste achievement", () => {
+  assert.equal(bounchAchievementForLevelClear(3), "bounch-level-3");
+  assert.equal(bounchAchievementForLevelClear(5), "bounch-level-5");
+  assert.equal(bounchAchievementForLevelClear(7), "bounch-level-7");
+});
+
+runTest("share URL bevat correct geëncodeerde tekst en Labs-link", () => {
+  const climber = getAchievementById("snake-score-500");
+  const master = getAchievementById("bounch-level-7");
+  assert.ok(climber);
+  assert.ok(master);
+
+  const snakeText = buildAchievementShareText(climber);
+  assert.match(snakeText, /Snake Climber/);
+  assert.match(snakeText, /Think you can beat it\?/);
+  assert.match(snakeText, new RegExp(LABS_PAGE_URL.replace(/\./g, "\\.")));
+
+  const snakeUrl = buildAchievementShareUrl(climber);
+  assert.ok(snakeUrl.startsWith("https://twitter.com/intent/tweet?text="));
+  assert.ok(snakeUrl.includes(encodeURIComponent(snakeText)));
+  assert.ok(snakeUrl.includes(encodeURIComponent(LABS_PAGE_URL)));
+
+  const bounchText = buildAchievementShareText(master);
+  assert.match(bounchText, /Bounch Master/);
+  assert.match(bounchText, /Can you reach Level 7\?/);
+  assert.match(bounchText, new RegExp(LABS_PAGE_URL.replace(/\./g, "\\.")));
+
+  const bounchUrl = buildAchievementShareUrl(master);
+  assert.ok(bounchUrl.includes(encodeURIComponent(bounchText)));
+});
+
+runTest("oude storage met onbekende ids blijft bruikbaar", () => {
+  const storage = createMemoryStorage({
+    [ACHIEVEMENTS_STORAGE_KEY]: JSON.stringify({
+      "future-badge": { unlockedAt: 11 },
+      "snake-first-game": { unlockedAt: 12 },
+    }),
+  });
+
+  const map = loadAchievementsMap(storage);
+  assert.equal(map["future-badge"].unlockedAt, 11);
+  assert.equal(map["snake-first-game"].unlockedAt, 12);
+  assert.equal(getUnlockedAchievements(storage).length, 1);
+  assert.equal(getUnlockedAchievements(storage)[0].id, "snake-first-game");
+
+  unlockAchievement("snake-score-100", { storage, now: 13, notify: false });
+  const after = loadAchievementsMap(storage);
+  assert.equal(after["future-badge"].unlockedAt, 11);
+  assert.equal(after["snake-score-100"].unlockedAt, 13);
+});
+
+runTest("V1 achievement set has exactly 8 definitions", () => {
+  assert.equal(ACHIEVEMENTS.length, 8);
+});
+
+console.log("All mango achievements tests passed.");

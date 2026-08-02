@@ -5,6 +5,11 @@
 
 import { resolveBounchContinueLevel } from "./bounchContinue.ts";
 import {
+  resolveBounchLevelSelection,
+  resolveBounchMaxUnlockedLevel,
+  shouldShowBounchLevelSelectButton,
+} from "./bounchLevelSelect.ts";
+import {
   isBounchHighScoreSharingEnabled,
   submitBounchHighscore,
 } from "./bounchHighscoreSubmit.ts";
@@ -16,6 +21,17 @@ import {
   formatBounchScoreResult,
   isBounchHighscoreApiResponse,
 } from "./bounchScoreResult.ts";
+import { bounchAchievementForLevelClear, unlockAchievements } from "./mangoAchievements.ts";
+import {
+  bounchPauseButtonLabel,
+  bounchStateAfterPauseToggle,
+  bounchStateAfterStop,
+  canPauseBounch,
+  canResumeBounch,
+  canStopBounchRun,
+  shouldShowBounchSessionControls,
+  type BounchSessionState,
+} from "./bounchSessionControls.ts";
 
 const CONFIG = {
   storageKey: "mango-bounch-best-level",
@@ -42,7 +58,7 @@ const CONFIG = {
   },
 } as const;
 
-type GameState = "idle" | "naming" | "ready" | "playing" | "won" | "over";
+type GameState = BounchSessionState;
 
 interface Rect {
   x: number;
@@ -572,6 +588,15 @@ export function initMangoBounch(): void {
   const playerNameInput = document.getElementById("mb-player-name") as HTMLInputElement | null;
   const submitScoreBtn = document.getElementById("mb-submit-score") as HTMLButtonElement | null;
   const skipScoreBtn = document.getElementById("mb-skip-score") as HTMLButtonElement | null;
+  const pauseBtn = document.getElementById("mb-pause") as HTMLButtonElement | null;
+  const stopBtn = document.getElementById("mb-stop") as HTMLButtonElement | null;
+  const levelsBtn = document.getElementById("mb-levels") as HTMLButtonElement | null;
+  const pauseOverlay = document.getElementById("mb-pause-overlay");
+  const levelSelectRoot = document.getElementById("mb-level-select");
+  const levelSelectGrid = document.getElementById("mb-level-select-grid");
+  const levelSelectCloseBtn = document.getElementById(
+    "mb-level-select-close"
+  ) as HTMLButtonElement | null;
 
   if (!canvas || !scoreNode || !highNode || !msgNode || !restartNode || !startPlayBtn) {
     return;
@@ -617,7 +642,14 @@ export function initMangoBounch(): void {
     shareStatusNode,
     playerNameInput,
     submitScoreBtn,
-    skipScoreBtn
+    skipScoreBtn,
+    pauseBtn,
+    stopBtn,
+    pauseOverlay,
+    levelsBtn,
+    levelSelectRoot,
+    levelSelectGrid,
+    levelSelectCloseBtn
   );
 }
 
@@ -655,7 +687,14 @@ function runMangoBounch(
   shareStatusNode: HTMLElement | null,
   playerNameInput: HTMLInputElement | null,
   submitScoreBtn: HTMLButtonElement | null,
-  skipScoreBtn: HTMLButtonElement | null
+  skipScoreBtn: HTMLButtonElement | null,
+  pauseBtn: HTMLButtonElement | null,
+  stopBtn: HTMLButtonElement | null,
+  pauseOverlay: HTMLElement | null,
+  levelsBtn: HTMLButtonElement | null,
+  levelSelectRoot: HTMLElement | null,
+  levelSelectGrid: HTMLElement | null,
+  levelSelectCloseBtn: HTMLButtonElement | null
 ): void {
   let state: GameState = "idle";
   let levelIndex = 0;
@@ -1061,6 +1100,8 @@ function runMangoBounch(
     setNodeVisible(howtoNode, false);
     setNodeVisible(levelReadyNode, false);
     msgNode.textContent = "Collect every ring, avoid the spikes, reach the finish!";
+    hidePauseOverlay();
+    updateSessionControls();
   }
 
   function setNamingView(): void {
@@ -1073,6 +1114,8 @@ function runMangoBounch(
     setNodeVisible(levelReadyNode, false);
     setNodeVisible(nameSetupNode, true);
     setNameSetupStatus("");
+    hidePauseOverlay();
+    updateSessionControls();
 
     if (setupPlayerNameInput) {
       setupPlayerNameInput.value = "";
@@ -1091,6 +1134,8 @@ function runMangoBounch(
     setOverlayScore(null);
     setApiResult(null);
     hideNameSetup();
+    hidePauseOverlay();
+    updateSessionControls();
 
     const level = activeLevel();
     const isFirstLevel = level.id === 1;
@@ -1116,6 +1161,161 @@ function runMangoBounch(
     setNodeVisible(howtoNode, false);
     setNodeVisible(levelReadyNode, false);
     msgNode.textContent = message;
+    hidePauseOverlay();
+    updateSessionControls();
+  }
+
+  function hidePauseOverlay(): void {
+    pauseOverlay?.setAttribute("hidden", "");
+  }
+
+  function showPauseOverlay(): void {
+    pauseOverlay?.removeAttribute("hidden");
+  }
+
+  function updateSessionControls(): void {
+    const showPauseStop = shouldShowBounchSessionControls(state);
+    const showLevels = shouldShowBounchLevelSelectButton(state);
+
+    if (pauseBtn) {
+      pauseBtn.hidden = !showPauseStop;
+      pauseBtn.textContent = bounchPauseButtonLabel(state);
+    }
+
+    if (stopBtn) {
+      stopBtn.hidden = !showPauseStop;
+    }
+
+    if (levelsBtn) {
+      levelsBtn.hidden = !showLevels;
+    }
+  }
+
+  function closeLevelSelect(): void {
+    levelSelectRoot?.setAttribute("hidden", "");
+  }
+
+  function renderLevelSelectGrid(): void {
+    if (!levelSelectGrid) {
+      return;
+    }
+
+    const maxUnlocked = resolveBounchMaxUnlockedLevel(highScore, LEVELS.length);
+    const currentId = activeLevel().id;
+    const parts: string[] = [];
+
+    for (let levelId = 1; levelId <= LEVELS.length; levelId += 1) {
+      const unlocked = levelId <= maxUnlocked;
+      const isCurrent = levelId === currentId;
+      const label = unlocked ? `Level ${levelId}` : `🔒 Level ${levelId}`;
+      const classes = [
+        "labs-bounch-levels__btn",
+        unlocked ? "" : "labs-bounch-levels__btn--locked",
+        isCurrent ? "labs-bounch-levels__btn--current" : "",
+      ]
+        .filter(Boolean)
+        .join(" ");
+
+      parts.push(
+        `<button type="button" class="${classes}" data-level-id="${levelId}"${
+          unlocked ? "" : " disabled aria-disabled=\"true\""
+        }>${label}</button>`
+      );
+    }
+
+    levelSelectGrid.innerHTML = parts.join("");
+  }
+
+  function openLevelSelect(): void {
+    if (!shouldShowBounchLevelSelectButton(state)) {
+      return;
+    }
+
+    if (state === "playing") {
+      pauseBounchRun();
+    }
+
+    renderLevelSelectGrid();
+    levelSelectRoot?.removeAttribute("hidden");
+
+    window.requestAnimationFrame(() => {
+      levelSelectCloseBtn?.focus();
+    });
+  }
+
+  function selectBounchLevel(levelId: unknown): boolean {
+    const selected = resolveBounchLevelSelection(levelId, highScore, LEVELS.length);
+
+    if (selected === null) {
+      return false;
+    }
+
+    closeShareModal();
+    closeLevelSelect();
+    submitClearToken += 1;
+    clearMovementInput();
+    hidePauseOverlay();
+    goToLevel(selected - 1);
+    return true;
+  }
+
+  function pauseBounchRun(): void {
+    if (!canPauseBounch(state)) {
+      return;
+    }
+
+    const next = bounchStateAfterPauseToggle(state);
+
+    if (next !== "paused") {
+      return;
+    }
+
+    state = "paused";
+    clearMovementInput();
+    lastTs = 0;
+    showPauseOverlay();
+    updateSessionControls();
+  }
+
+  function resumeBounchRun(): void {
+    if (!canResumeBounch(state)) {
+      return;
+    }
+
+    const next = bounchStateAfterPauseToggle(state);
+
+    if (next !== "playing") {
+      return;
+    }
+
+    state = "playing";
+    lastTs = 0;
+    hidePauseOverlay();
+    updateSessionControls();
+  }
+
+  function toggleBounchPause(): void {
+    if (state === "playing") {
+      pauseBounchRun();
+      return;
+    }
+
+    if (state === "paused") {
+      resumeBounchRun();
+    }
+  }
+
+  /** Abort the current attempt without clear/submit/achievement; back to same-level ready. */
+  function stopBounchRun(): void {
+    if (!canStopBounchRun(state) || bounchStateAfterStop(state) !== "ready") {
+      return;
+    }
+
+    submitClearToken += 1;
+    clearMovementInput();
+    closeLevelSelect();
+    hidePauseOverlay();
+    enterReady();
   }
 
   function openGameModal(): void {
@@ -1130,7 +1330,9 @@ function runMangoBounch(
     stopLoop();
     clearMovementInput();
     closeShareModal();
+    closeLevelSelect();
     hideNameSetup();
+    hidePauseOverlay();
     state = "idle";
     levelIndex = 0;
     clearedLevel = 0;
@@ -1257,6 +1459,8 @@ function runMangoBounch(
     hideNameSetup();
     setNodeVisible(howtoNode, false);
     setNodeVisible(levelReadyNode, false);
+    hidePauseOverlay();
+    updateSessionControls();
   }
 
   function finishGame(message: string, next: "won" | "over"): void {
@@ -1268,11 +1472,19 @@ function runMangoBounch(
     clearMovementInput();
     mango.vx = 0;
     mango.vy = 0;
+    hidePauseOverlay();
+    updateSessionControls();
 
     if (next === "won") {
       const clearedId = activeLevel().id;
       recordLevelClear(clearedId);
       updateHud();
+
+      const achievementId = bounchAchievementForLevelClear(clearedId);
+
+      if (achievementId) {
+        unlockAchievements([achievementId]);
+      }
 
       const hasNextLevel = levelIndex < LEVELS.length - 1;
 
@@ -1560,6 +1772,13 @@ function runMangoBounch(
   }
 
   function loop(timestamp: number): void {
+    if (state === "paused") {
+      lastTs = 0;
+      draw();
+      animationId = window.requestAnimationFrame(loop);
+      return;
+    }
+
     if (!lastTs) {
       lastTs = timestamp;
     }
@@ -1636,7 +1855,11 @@ function runMangoBounch(
       return;
     }
 
-    if (state === "over" || state === "won" || state === "idle" || state === "naming") {
+    if (levelSelectRoot && !levelSelectRoot.hasAttribute("hidden")) {
+      return;
+    }
+
+    if (state === "over" || state === "won" || state === "idle" || state === "naming" || state === "paused") {
       return;
     }
 
@@ -1809,6 +2032,45 @@ function runMangoBounch(
   restartNode.addEventListener("click", () => {
     closeShareModal();
     enterReady();
+  });
+
+  pauseBtn?.addEventListener("click", () => {
+    toggleBounchPause();
+  });
+
+  stopBtn?.addEventListener("click", () => {
+    stopBounchRun();
+  });
+
+  levelsBtn?.addEventListener("click", () => {
+    openLevelSelect();
+  });
+
+  levelSelectCloseBtn?.addEventListener("click", () => {
+    closeLevelSelect();
+  });
+
+  levelSelectRoot?.addEventListener("click", (event) => {
+    if (event.target === levelSelectRoot) {
+      closeLevelSelect();
+    }
+  });
+
+  levelSelectGrid?.addEventListener("click", (event) => {
+    const target = event.target;
+
+    if (!(target instanceof HTMLElement)) {
+      return;
+    }
+
+    const button = target.closest<HTMLButtonElement>("button[data-level-id]");
+
+    if (!button || button.disabled) {
+      return;
+    }
+
+    const rawId = button.getAttribute("data-level-id");
+    selectBounchLevel(rawId);
   });
 
   nextLevelBtn?.addEventListener("click", () => {
