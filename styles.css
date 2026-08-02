@@ -1734,6 +1734,33 @@ body.labs-share-modal-open {
   cursor: not-allowed;
 }
 
+.labs-achievement-card__shared,
+.labs-achievement-toast__shared {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  margin-top: 0.35rem;
+  align-self: flex-start;
+  padding: 0.35rem 0.7rem;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 179, 71, 0.4);
+  background: rgba(8, 52, 74, 0.85);
+  font-size: 0.82rem;
+  font-weight: 700;
+  color: var(--mango);
+  pointer-events: none;
+  user-select: none;
+}
+
+.labs-achievement-toast__shared {
+  margin-top: 0;
+  align-self: center;
+}
+
+.labs-achievement-toast__shared[hidden] {
+  display: none;
+}
+
 .labs-achievement-toast {
   position: fixed;
   inset: 0;

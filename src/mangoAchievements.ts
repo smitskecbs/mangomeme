@@ -18,9 +18,16 @@ export interface AchievementDef {
 
 export interface UnlockedRecord {
   unlockedAt: number;
+  /** Set when the player clicked Share on X (intent opened); not proof of a published post. */
+  sharedAt?: number;
 }
 
 export type AchievementsMap = Record<string, UnlockedRecord>;
+
+/** Consistent label shown after a local Share on X click. */
+export const ACHIEVEMENT_SHARED_LABEL = "📣 Shared";
+
+export type AchievementShareUiState = "share" | "shared" | "none";
 
 export interface AchievementStorage {
   getItem(key: string): string | null;
@@ -165,7 +172,14 @@ export function parseAchievementsStorage(raw: string | null): AchievementsMap {
         continue;
       }
 
-      result[id] = { unlockedAt };
+      const record: UnlockedRecord = { unlockedAt };
+      const sharedAt = (value as { sharedAt?: unknown }).sharedAt;
+
+      if (typeof sharedAt === "number" && Number.isFinite(sharedAt)) {
+        record.sharedAt = sharedAt;
+      }
+
+      result[id] = record;
     }
 
     return result;
@@ -188,15 +202,19 @@ export function saveAchievementsMap(map: AchievementsMap, storage?: AchievementS
 
 export function getUnlockedAchievements(
   storage?: AchievementStorage
-): Array<AchievementDef & { unlockedAt: number }> {
+): Array<AchievementDef & { unlockedAt: number; sharedAt?: number }> {
   const map = loadAchievementsMap(storage);
-  const unlocked: Array<AchievementDef & { unlockedAt: number }> = [];
+  const unlocked: Array<AchievementDef & { unlockedAt: number; sharedAt?: number }> = [];
 
   for (const def of ACHIEVEMENTS) {
     const record = map[def.id];
 
     if (record) {
-      unlocked.push({ ...def, unlockedAt: record.unlockedAt });
+      unlocked.push({
+        ...def,
+        unlockedAt: record.unlockedAt,
+        ...(record.sharedAt !== undefined ? { sharedAt: record.sharedAt } : {}),
+      });
     }
   }
 
@@ -205,6 +223,58 @@ export function getUnlockedAchievements(
 
 export function isAchievementUnlocked(id: string, storage?: AchievementStorage): boolean {
   return Boolean(loadAchievementsMap(storage)[id]);
+}
+
+export function isAchievementShared(id: string, storage?: AchievementStorage): boolean {
+  const sharedAt = loadAchievementsMap(storage)[id]?.sharedAt;
+  return typeof sharedAt === "number" && Number.isFinite(sharedAt);
+}
+
+/**
+ * Gallery/toast share control model for one achievement id.
+ * Locked or unknown → none; unlocked unshared → share; unlocked shared → shared.
+ */
+export function getAchievementShareUiState(
+  id: string,
+  storage?: AchievementStorage
+): AchievementShareUiState {
+  if (!getAchievementById(id) || !isAchievementUnlocked(id, storage)) {
+    return "none";
+  }
+
+  return isAchievementShared(id, storage) ? "shared" : "share";
+}
+
+/**
+ * Mark an unlocked achievement as locally shared after Share on X was clicked.
+ * Unknown / locked ids are ignored. Re-marking is safe and keeps unlockedAt.
+ */
+export function markAchievementShared(
+  id: string,
+  options: { storage?: AchievementStorage; now?: number } = {}
+): boolean {
+  if (!getAchievementById(id)) {
+    return false;
+  }
+
+  const storage = resolveStorage(options.storage);
+  const map = loadAchievementsMap(storage);
+  const record = map[id];
+
+  if (!record) {
+    return false;
+  }
+
+  if (typeof record.sharedAt === "number" && Number.isFinite(record.sharedAt)) {
+    return true;
+  }
+
+  map[id] = {
+    unlockedAt: record.unlockedAt,
+    sharedAt: options.now ?? Date.now(),
+  };
+  saveAchievementsMap(map, storage);
+  return true;
 }
 
 /**
@@ -267,6 +337,27 @@ export function buildAchievementShareUrl(achievement: AchievementDef): string {
 
 export function openAchievementShare(achievement: AchievementDef): void {
   window.open(buildAchievementShareUrl(achievement), "_blank", "noopener,noreferrer");
+}
+
+/**
+ * Open the X intent and mark the achievement as locally shared.
+ * Returns false when the id is unknown or not unlocked.
+ */
+export function shareAchievementOnX(
+  id: string,
+  options: { storage?: AchievementStorage; now?: number } = {}
+): boolean {
+  const def = getAchievementById(id);
+
+  if (!def || !isAchievementUnlocked(id, options.storage)) {
+    return false;
+  }
+
+  openAchievementShare(def);
+  markAchievementShared(id, options);
+  renderGallery();
+  syncActiveToastShareUi();
+  return true;
 }
 
 /**
@@ -346,9 +437,14 @@ function renderGallery(): void {
   for (const def of ACHIEVEMENTS) {
     const unlocked = Boolean(map[def.id]);
     const status = unlocked ? "Unlocked" : "Locked";
-    const shareBtn = unlocked
-      ? `<button type="button" class="btn btn-copy labs-achievement-card__share" data-achievement-id="${def.id}">Share on X</button>`
-      : `<button type="button" class="btn btn-solscan labs-achievement-card__share" disabled aria-disabled="true">Share on X</button>`;
+    const shareUi = getAchievementShareUiState(def.id);
+    let shareControl = "";
+
+    if (shareUi === "share") {
+      shareControl = `<button type="button" class="btn btn-copy labs-achievement-card__share" data-achievement-id="${def.id}">Share on X</button>`;
+    } else if (shareUi === "shared") {
+      shareControl = `<span class="labs-achievement-card__shared">${ACHIEVEMENT_SHARED_LABEL}</span>`;
+    }
 
     parts.push(`
       <article class="labs-achievement-card${unlocked ? "" : " labs-achievement-card--locked"}" data-achievement-id="${def.id}">
@@ -358,7 +454,7 @@ function renderGallery(): void {
         </div>
         <h3 class="labs-achievement-card__title">${def.title}</h3>
         <p class="labs-achievement-card__desc">${def.description}</p>
-        ${shareBtn}
+        ${shareControl}
       </article>
     `);
   }
@@ -372,6 +468,7 @@ function getToastElements(): {
   title: HTMLElement;
   desc: HTMLElement;
   share: HTMLButtonElement;
+  shared: HTMLElement;
   close: HTMLButtonElement;
 } | null {
   const root = document.getElementById("ma-toast");
@@ -379,13 +476,34 @@ function getToastElements(): {
   const title = document.getElementById("ma-toast-title");
   const desc = document.getElementById("ma-toast-desc");
   const share = document.getElementById("ma-toast-share") as HTMLButtonElement | null;
+  const shared = document.getElementById("ma-toast-shared");
   const close = document.getElementById("ma-toast-close") as HTMLButtonElement | null;
 
-  if (!root || !icon || !title || !desc || !share || !close) {
+  if (!root || !icon || !title || !desc || !share || !shared || !close) {
     return null;
   }
 
-  return { root, icon, title, desc, share, close };
+  return { root, icon, title, desc, share, shared, close };
+}
+
+function syncActiveToastShareUi(): void {
+  const els = getToastElements();
+
+  if (!els || !toastActive) {
+    return;
+  }
+
+  const shareUi = getAchievementShareUiState(toastActive.id);
+
+  if (shareUi === "shared") {
+    els.share.hidden = true;
+    els.shared.hidden = false;
+    els.shared.textContent = ACHIEVEMENT_SHARED_LABEL;
+    return;
+  }
+
+  els.share.hidden = false;
+  els.shared.hidden = true;
 }
 
 function showToast(achievement: AchievementDef): void {
@@ -399,6 +517,7 @@ function showToast(achievement: AchievementDef): void {
   els.icon.textContent = achievement.icon;
   els.title.textContent = achievement.title;
   els.desc.textContent = achievement.description;
+  syncActiveToastShareUi();
   els.root.removeAttribute("hidden");
   document.body.classList.add("labs-achievement-toast-open");
 
@@ -466,9 +585,11 @@ function bindToastControls(): void {
   });
 
   els.share.addEventListener("click", () => {
-    if (toastActive) {
-      openAchievementShare(toastActive);
+    if (!toastActive) {
+      return;
     }
+
+    shareAchievementOnX(toastActive.id);
   });
 
   els.root.addEventListener("click", (event) => {
@@ -506,13 +627,7 @@ function bindGalleryShares(): void {
       return;
     }
 
-    const def = getAchievementById(id);
-
-    if (!def || !isAchievementUnlocked(id)) {
-      return;
-    }
-
-    openAchievementShare(def);
+    shareAchievementOnX(id);
   });
 }
 

@@ -7,14 +7,18 @@ import assert from "node:assert/strict";
 import {
   ACHIEVEMENTS,
   ACHIEVEMENTS_STORAGE_KEY,
+  ACHIEVEMENT_SHARED_LABEL,
   LABS_PAGE_URL,
   bounchAchievementForLevelClear,
   buildAchievementShareText,
   buildAchievementShareUrl,
   getAchievementById,
+  getAchievementShareUiState,
   getUnlockedAchievements,
+  isAchievementShared,
   isAchievementUnlocked,
   loadAchievementsMap,
+  markAchievementShared,
   parseAchievementsStorage,
   snakeAchievementsForRun,
   unlockAchievement,
@@ -241,6 +245,91 @@ runTest("oude storage met onbekende ids blijft bruikbaar", () => {
 
 runTest("V1 achievement set has exactly 8 definitions", () => {
   assert.equal(ACHIEVEMENTS.length, 8);
+});
+
+runTest("unlocked achievement start als niet gedeeld", () => {
+  const storage = createMemoryStorage();
+  unlockAchievement("snake-first-game", { storage, now: 1, notify: false });
+  assert.equal(isAchievementShared("snake-first-game", storage), false);
+  assert.equal(getAchievementShareUiState("snake-first-game", storage), "share");
+  assert.equal(loadAchievementsMap(storage)["snake-first-game"].sharedAt, undefined);
+});
+
+runTest("mark shared voegt sharedAt toe", () => {
+  const storage = createMemoryStorage();
+  unlockAchievement("snake-score-100", { storage, now: 2, notify: false });
+  assert.equal(markAchievementShared("snake-score-100", { storage, now: 20 }), true);
+  assert.equal(isAchievementShared("snake-score-100", storage), true);
+  assert.equal(loadAchievementsMap(storage)["snake-score-100"].sharedAt, 20);
+  assert.equal(loadAchievementsMap(storage)["snake-score-100"].unlockedAt, 2);
+});
+
+runTest("shared-status blijft na opnieuw inlezen", () => {
+  const storage = createMemoryStorage();
+  unlockAchievement("snake-score-500", { storage, now: 3, notify: false });
+  markAchievementShared("snake-score-500", { storage, now: 30 });
+
+  const reloaded = loadAchievementsMap(storage);
+  assert.equal(reloaded["snake-score-500"].unlockedAt, 3);
+  assert.equal(reloaded["snake-score-500"].sharedAt, 30);
+  assert.equal(isAchievementShared("snake-score-500", storage), true);
+});
+
+runTest("dubbel markeren veroorzaakt geen fout en overschrijft unlock niet", () => {
+  const storage = createMemoryStorage();
+  unlockAchievement("snake-first-game", { storage, now: 4, notify: false });
+  assert.equal(markAchievementShared("snake-first-game", { storage, now: 40 }), true);
+  assert.equal(markAchievementShared("snake-first-game", { storage, now: 99 }), true);
+  const record = loadAchievementsMap(storage)["snake-first-game"];
+  assert.equal(record.unlockedAt, 4);
+  assert.equal(record.sharedAt, 40);
+});
+
+runTest("één gedeeld achievement beïnvloedt een ander niet", () => {
+  const storage = createMemoryStorage();
+  unlockAchievements(["snake-first-game", "snake-score-100"], {
+    storage,
+    now: 5,
+    notify: false,
+  });
+  markAchievementShared("snake-first-game", { storage, now: 50 });
+  assert.equal(isAchievementShared("snake-first-game", storage), true);
+  assert.equal(isAchievementShared("snake-score-100", storage), false);
+  assert.equal(getAchievementShareUiState("snake-score-100", storage), "share");
+});
+
+runTest("oude storage zonder sharedAt blijft geldig", () => {
+  const storage = createMemoryStorage({
+    [ACHIEVEMENTS_STORAGE_KEY]: JSON.stringify({
+      "snake-first-game": { unlockedAt: 12 },
+    }),
+  });
+  assert.equal(isAchievementUnlocked("snake-first-game", storage), true);
+  assert.equal(isAchievementShared("snake-first-game", storage), false);
+  assert.equal(getAchievementShareUiState("snake-first-game", storage), "share");
+  assert.equal(parseAchievementsStorage('{"snake-first-game":{"unlockedAt":12}}')["snake-first-game"].sharedAt, undefined);
+});
+
+runTest("locked/onbekende id kan niet foutief gedeeld worden", () => {
+  const storage = createMemoryStorage();
+  assert.equal(markAchievementShared("snake-first-game", { storage, now: 1 }), false);
+  assert.equal(markAchievementShared("not-real", { storage, now: 1 }), false);
+  assert.equal(getAchievementShareUiState("snake-first-game", storage), "none");
+  assert.equal(getAchievementShareUiState("ghost", storage), "none");
+});
+
+runTest("gallery-model geeft Share voor unlocked/unshared", () => {
+  const storage = createMemoryStorage();
+  unlockAchievement("bounch-level-1", { storage, now: 6, notify: false });
+  assert.equal(getAchievementShareUiState("bounch-level-1", storage), "share");
+});
+
+runTest("gallery-model geeft Shared voor unlocked/shared", () => {
+  const storage = createMemoryStorage();
+  unlockAchievement("bounch-level-1", { storage, now: 6, notify: false });
+  markAchievementShared("bounch-level-1", { storage, now: 60 });
+  assert.equal(getAchievementShareUiState("bounch-level-1", storage), "shared");
+  assert.equal(ACHIEVEMENT_SHARED_LABEL, "📣 Shared");
 });
 
 console.log("All mango achievements tests passed.");
