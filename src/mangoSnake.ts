@@ -1062,6 +1062,7 @@ function runMangoSnake(
 
     controlCluster.addEventListener("pointerdown", guardEvent);
     controlCluster.addEventListener("pointerup", guardEvent);
+    controlCluster.addEventListener("pointercancel", guardEvent);
     controlCluster.addEventListener("click", guardEvent);
   }
 
@@ -1070,15 +1071,69 @@ function runMangoSnake(
       return;
     }
 
-    btn.addEventListener("pointerdown", (event) => {
+    let activePointerId: number | null = null;
+
+    const clearPointer = (pointerId: number | null = null): void => {
+      if (activePointerId === null) {
+        return;
+      }
+
+      if (pointerId !== null && pointerId !== activePointerId) {
+        return;
+      }
+
+      const capturedId = activePointerId;
+      activePointerId = null;
+
+      try {
+        if (btn.hasPointerCapture(capturedId)) {
+          btn.releasePointerCapture(capturedId);
+        }
+      } catch {
+        // ignore capture release failures
+      }
+    };
+
+    btn.addEventListener("pointerdown", (event: PointerEvent) => {
       if (isShareFormTarget(event.target)) {
         return;
       }
 
+      if (event.pointerType === "mouse" && event.button !== 0) {
+        return;
+      }
+
       stopControlEvent(event);
+
+      if (activePointerId !== null && activePointerId !== event.pointerId) {
+        return;
+      }
+
+      activePointerId = event.pointerId;
+
+      try {
+        btn.setPointerCapture(event.pointerId);
+      } catch {
+        // capture is best-effort; direction still applies on down
+      }
+
       setDirection(dir);
     });
 
+    const onPointerEnd = (event: PointerEvent): void => {
+      if (activePointerId !== null && event.pointerId !== activePointerId) {
+        return;
+      }
+
+      stopControlEvent(event);
+      clearPointer(event.pointerId);
+    };
+
+    btn.addEventListener("pointerup", onPointerEnd);
+    btn.addEventListener("pointercancel", onPointerEnd);
+    btn.addEventListener("lostpointercapture", () => {
+      activePointerId = null;
+    });
     btn.addEventListener("click", (event) => {
       stopControlEvent(event);
     });
