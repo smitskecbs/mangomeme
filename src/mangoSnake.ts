@@ -6,10 +6,11 @@ import {
   formatSnakeScoreResult,
   isSnakeHighscoreApiResponse,
 } from "./snakeScoreResult.ts";
-import { snakeAchievementsForRun, unlockAchievements } from "./mangoAchievements.ts";
+import { snakeAchievementsForRun, unlockAchievements, flushDeferredAchievementToasts } from "./mangoAchievements.ts";
 import {
   canStopSnakeRun,
   canToggleSnakePause,
+  planSnakeGameOverSideEffects,
   snakePauseButtonLabel,
   snakeStateAfterPauseToggle,
   snakeStateAfterStop,
@@ -297,7 +298,8 @@ function runMangoSnake(
     startPlayBtn.hidden = false;
     restartNode.hidden = true;
     setOverlayScore(null);
-    msgNode.textContent = "Eat mangos. Stay inside the border!";
+    msgNode.textContent =
+      "Use the arrow keys or WASD to move. The snake wraps around every edge. Avoid biting your own tail. Collect mangoes and beat your best score.";
     hidePauseOverlay();
     updateSessionControls();
   }
@@ -461,7 +463,8 @@ function runMangoSnake(
     startPlayBtn.hidden = false;
     restartNode.hidden = true;
     setOverlayScore(null);
-    msgNode.textContent = "Eat mangos. Stay inside the border!";
+    msgNode.textContent =
+      "Use the arrow keys or WASD to move. The snake wraps around every edge. Avoid biting your own tail. Collect mangoes and beat your best score.";
   }
 
   activeClose = dismissSnakeSession;
@@ -504,9 +507,9 @@ function runMangoSnake(
     });
   }
 
-  function openShareModal(newScore: number): void {
+  function openShareModal(newScore: number): boolean {
     if (!isHighScoreSharingEnabled() || !shareModal) {
-      return;
+      return false;
     }
 
     pendingShareScore = newScore;
@@ -526,6 +529,8 @@ function runMangoSnake(
       playerNameInput?.focus();
       playerNameInput?.select();
     });
+
+    return true;
   }
 
   function closeShareModal(): void {
@@ -534,6 +539,7 @@ function runMangoSnake(
     pendingShareScore = 0;
     isSubmittingScore = false;
     resetShareModalToForm();
+    flushDeferredAchievementToasts();
   }
 
   function updateHud(): void {
@@ -656,7 +662,18 @@ function runMangoSnake(
       saveHighScore(highScore);
     }
 
-    unlockAchievements(snakeAchievementsForRun(score));
+    const sideEffects = planSnakeGameOverSideEffects({
+      source: "finalize",
+      sharingEnabled: isHighScoreSharingEnabled(),
+    });
+
+    try {
+      unlockAchievements(snakeAchievementsForRun(score), {
+        deferToast: sideEffects.deferAchievementToast,
+      });
+    } catch {
+      // Achievements must never block highscore share/submit.
+    }
 
     msgNode.textContent = message;
     setGameOverOverlay(message);
@@ -666,8 +683,12 @@ function runMangoSnake(
       restartNode.focus();
     });
 
-    if (isHighScoreSharingEnabled()) {
-      openShareModal(score);
+    if (sideEffects.openShareModal) {
+      if (!openShareModal(score)) {
+        flushDeferredAchievementToasts();
+      }
+    } else {
+      flushDeferredAchievementToasts();
     }
   }
 

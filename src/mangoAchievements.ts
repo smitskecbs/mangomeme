@@ -32,6 +32,11 @@ export interface UnlockOptions {
   now?: number;
   /** When false, skip toast/gallery side effects (tests). Default true. */
   notify?: boolean;
+  /**
+   * Persist unlock + refresh gallery, but queue toasts until
+   * flushDeferredAchievementToasts() — keeps share/submit UI unblocked.
+   */
+  deferToast?: boolean;
 }
 
 export const ACHIEVEMENTS: readonly AchievementDef[] = [
@@ -123,6 +128,7 @@ type NewlyUnlockedListener = (achievements: AchievementDef[]) => void;
 
 let newlyUnlockedListener: NewlyUnlockedListener | null = null;
 let toastQueue: AchievementDef[] = [];
+let deferredToastQueue: AchievementDef[] = [];
 let toastActive: AchievementDef | null = null;
 let toastBound = false;
 
@@ -268,28 +274,8 @@ export function openAchievementShare(achievement: AchievementDef): void {
  * Unknown ids are ignored.
  */
 export function unlockAchievement(id: string, options: UnlockOptions = {}): AchievementDef | null {
-  const def = getAchievementById(id);
-
-  if (!def) {
-    return null;
-  }
-
-  const storage = resolveStorage(options.storage);
-  const map = loadAchievementsMap(storage);
-
-  if (map[id]) {
-    return null;
-  }
-
-  const now = options.now ?? Date.now();
-  map[id] = { unlockedAt: now };
-  saveAchievementsMap(map, storage);
-
-  if (options.notify !== false) {
-    newlyUnlockedListener?.([def]);
-  }
-
-  return def;
+  const newly = unlockAchievements([id], options);
+  return newly[0] ?? null;
 }
 
 /**
@@ -318,14 +304,36 @@ export function unlockAchievements(ids: string[], options: UnlockOptions = {}): 
 
   saveAchievementsMap(map, storage);
 
-  if (options.notify !== false) {
-    newlyUnlockedListener?.([...newly]);
+  if (options.notify === false) {
+    return newly;
   }
 
+  if (options.deferToast) {
+    renderGallery();
+    deferredToastQueue.push(...newly);
+    return newly;
+  }
+
+  newlyUnlockedListener?.([...newly]);
   return newly;
 }
 
+/** Show any achievement toasts queued with deferToast (e.g. after Snake share closes). */
+export function flushDeferredAchievementToasts(): void {
+  if (deferredToastQueue.length === 0) {
+    return;
+  }
+
+  const pending = deferredToastQueue;
+  deferredToastQueue = [];
+  newlyUnlockedListener?.([...pending]);
+}
+
 function renderGallery(): void {
+  if (typeof document === "undefined") {
+    return;
+  }
+
   const grid = document.getElementById("ma-gallery");
 
   if (!grid) {
@@ -514,6 +522,7 @@ function bindGalleryShares(): void {
  */
 export function dismissAchievementNotifications(): void {
   toastQueue = [];
+  deferredToastQueue = [];
   hideToastShell();
 }
 

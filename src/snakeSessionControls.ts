@@ -48,3 +48,33 @@ export function snakeStateAfterStop(state: SnakeSessionState): SnakeSessionState
 
   return "idle";
 }
+
+export interface SnakeGameOverSideEffects {
+  unlockAchievements: boolean;
+  openShareModal: boolean;
+  deferAchievementToast: boolean;
+}
+
+/**
+ * Side effects for Snake end-of-run paths.
+ * Stop/dismiss never share. Finalize opens share when enabled and defers toasts
+ * so the achievement overlay cannot block submit.
+ */
+export function planSnakeGameOverSideEffects(input: {
+  source: "finalize" | "stop" | "dismiss";
+  sharingEnabled: boolean;
+}): SnakeGameOverSideEffects {
+  if (input.source !== "finalize") {
+    return {
+      unlockAchievements: false,
+      openShareModal: false,
+      deferAchievementToast: false,
+    };
+  }
+
+  return {
+    unlockAchievements: true,
+    openShareModal: input.sharingEnabled,
+    deferAchievementToast: input.sharingEnabled,
+  };
+}
