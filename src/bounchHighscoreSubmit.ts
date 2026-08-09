@@ -6,6 +6,11 @@
  * https://api.mangomeme.fun/bounch-highscore
  */
 
+import {
+  buildBounchHighscoreBody,
+  getGameIdentityToken,
+} from "./mangoGameIdentity.ts";
+
 const RAW_ENV_URL = import.meta.env.VITE_MANGO_BOUNCH_HIGHSCORE_API_URL?.trim() || "";
 const EXPECTED_PATH = "/bounch-highscore";
 const EXPECTED_API_URL = "https://api.mangomeme.fun/bounch-highscore";
@@ -188,10 +193,9 @@ export async function submitBounchHighscore(
       headers: {
         "content-type": "application/json",
       },
-      body: JSON.stringify({
-        name: trimmedName,
-        level,
-      }),
+      body: JSON.stringify(
+        buildBounchHighscoreBody(trimmedName, level, getGameIdentityToken("bounch"))
+      ),
     });
 
     const responseText = await response.text();

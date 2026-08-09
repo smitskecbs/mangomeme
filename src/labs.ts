@@ -1,7 +1,9 @@
 import { closeMangoSnake, initMangoSnake } from "./mangoSnake.ts";
 import { closeMangoBounch, initMangoBounch } from "./mangoBounch.ts";
 import { initMangoAchievements } from "./mangoAchievements.ts";
+import { captureGameIdentityFromLocation } from "./mangoGameIdentity.ts";
 
+captureGameIdentityFromLocation();
 initMangoSnake();
 initMangoBounch();
 initMangoAchievements();

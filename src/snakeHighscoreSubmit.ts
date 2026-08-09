@@ -6,6 +6,11 @@
  * https://api.mangomeme.fun/snake-highscore
  */
 
+import {
+  buildSnakeHighscoreBody,
+  getGameIdentityToken,
+} from "./mangoGameIdentity.ts";
+
 const RAW_ENV_URL = import.meta.env.VITE_MANGO_HIGHSCORE_API_URL?.trim() || "";
 const EXPECTED_PATH = "/snake-highscore";
 const EXPECTED_API_URL = "https://api.mangomeme.fun/snake-highscore";
@@ -188,10 +193,9 @@ export async function submitSnakeHighscore(
       headers: {
         "content-type": "application/json",
       },
-      body: JSON.stringify({
-        name: trimmedName,
-        score,
-      }),
+      body: JSON.stringify(
+        buildSnakeHighscoreBody(trimmedName, score, getGameIdentityToken("snake"))
+      ),
     });
 
     const responseText = await response.text();
