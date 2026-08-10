@@ -1,3 +1,13 @@
+export interface GameXpApiPayload {
+  awarded?: number;
+  dailyPlay?: number;
+  unlock?: number;
+}
+
+export interface GameIdentityApiPayload {
+  verified?: boolean;
+}
+
 export interface SnakeHighscoreApiResponse {
   ok?: boolean;
   posted?: boolean;
@@ -15,6 +25,8 @@ export interface SnakeHighscoreApiResponse {
   leaderboard?: Array<{ name: string; score: number }>;
   reason?: string;
   error?: string;
+  identity?: GameIdentityApiPayload;
+  xp?: GameXpApiPayload;
 }
 
 export interface SnakeScoreResultMessage {
@@ -37,6 +49,40 @@ function formatGamesPlayedLine(body: SnakeHighscoreApiResponse): string {
   return `\n\nGames played:\n${gamesPlayed}`;
 }
 
+/**
+ * XP line for verified submits only. Unverified → empty.
+ */
+export function formatGameXpLine(body: {
+  identity?: GameIdentityApiPayload;
+  xp?: GameXpApiPayload;
+}): string {
+  if (!body.identity?.verified) {
+    return "";
+  }
+
+  const awarded = readNumber(body.xp?.awarded, 0);
+  const dailyPlay = readNumber(body.xp?.dailyPlay, 0);
+  const unlock = readNumber(body.xp?.unlock, 0);
+
+  if (awarded <= 0) {
+    return "\n\nGame XP: already claimed today";
+  }
+
+  const parts: string[] = [];
+  if (dailyPlay > 0) {
+    parts.push(`daily +${dailyPlay}`);
+  }
+  if (unlock > 0) {
+    parts.push(`unlock +${unlock}`);
+  }
+
+  if (parts.length > 0) {
+    return `\n\nGame XP: +${awarded} (${parts.join(", ")})`;
+  }
+
+  return `\n\nGame XP: +${awarded}`;
+}
+
 export function formatSnakeScoreResult(
   body: SnakeHighscoreApiResponse,
   submittedScore: number
@@ -48,24 +94,25 @@ export function formatSnakeScoreResult(
   const globalHighScore = readNumber(body.globalHighScore, 0);
   const globalHighScoreName = body.globalHighScoreName?.trim() || "ManGo Player";
   const gamesPlayedLine = formatGamesPlayedLine(body);
+  const xpLine = formatGameXpLine(body);
 
   if (personalBestImproved && body.isNewGlobal) {
     return {
       title: "🏆 NEW GLOBAL HIGHSCORE!",
-      body: `Score: ${score}\n\nYou are now #1!${gamesPlayedLine}`,
+      body: `Score: ${score}\n\nYou are now #1!${gamesPlayedLine}${xpLine}`,
     };
   }
 
   if (personalBestImproved) {
     return {
       title: "🥳 NEW PERSONAL BEST!",
-      body: `Score: ${score}\n\nCurrent Rank: #${rank}${gamesPlayedLine}`,
+      body: `Score: ${score}\n\nCurrent Rank: #${rank}${gamesPlayedLine}${xpLine}`,
     };
   }
 
   return {
     title: "🐍 Nice run!",
-    body: `Score:\n${score}\n\nYour Personal Best:\n${personalBestScore}\n\nCurrent Rank:\n#${rank}\n\nGlobal Highscore:\n${globalHighScore} by ${globalHighScoreName}\n\nKeep trying! 🥭${gamesPlayedLine}`,
+    body: `Score:\n${score}\n\nYour Personal Best:\n${personalBestScore}\n\nCurrent Rank:\n#${rank}\n\nGlobal Highscore:\n${globalHighScore} by ${globalHighScoreName}\n\nKeep trying! 🥭${gamesPlayedLine}${xpLine}`,
   };
 }
 

@@ -6,11 +6,15 @@
 import assert from "node:assert/strict";
 import {
   GAME_TOKEN_STORAGE_KEYS,
+  GAME_SUGGESTED_NAME_STORAGE_KEYS,
   buildBounchHighscoreBody,
   buildSnakeHighscoreBody,
   captureGameIdentityFromLocation,
   getGameIdentityToken,
+  getSuggestedPlayerName,
   isMangoGameId,
+  readGameTokenPayloadClaims,
+  resolvePlayerNameForAutofill,
 } from "../src/mangoGameIdentity.ts";
 
 function runTest(name, fn) {
@@ -35,6 +39,16 @@ function createMemoryStorage(initial = {}) {
     },
     _data: data,
   };
+}
+
+function craftUnsignedToken(payload) {
+  const json = JSON.stringify(payload);
+  const b64 = Buffer.from(json, "utf8")
+    .toString("base64")
+    .replace(/\+/g, "-")
+    .replace(/\//g, "_")
+    .replace(/=+$/g, "");
+  return `${b64}.fakesig`;
 }
 
 runTest("accepts only snake and bounch game ids", () => {
@@ -252,6 +266,57 @@ runTest("score response body builders stay compatible without token", () => {
 runTest("storage keys are session-scoped names", () => {
   assert.equal(GAME_TOKEN_STORAGE_KEYS.snake, "mango-game-token-snake");
   assert.equal(GAME_TOKEN_STORAGE_KEYS.bounch, "mango-game-token-bounch");
+});
+
+runTest("readGameTokenPayloadClaims extracts optional name", () => {
+  const token = craftUnsignedToken({
+    uid: "1",
+    game: "snake",
+    exp: 9999999999,
+    name: "Kevin",
+  });
+  const claims = readGameTokenPayloadClaims(token);
+  assert.equal(claims.game, "snake");
+  assert.equal(claims.name, "Kevin");
+  assert.equal(readGameTokenPayloadClaims("not-a-token").name, null);
+});
+
+runTest("capture stores suggested name from token payload", () => {
+  const storage = createMemoryStorage();
+  const token = craftUnsignedToken({
+    uid: "42",
+    game: "snake",
+    exp: 9999999999,
+    name: "Ada",
+  });
+  const result = captureGameIdentityFromLocation({
+    search: `?game=snake&t=${token}`,
+    pathname: "/mango-labs",
+    storage,
+    historyReplaceState: () => {},
+  });
+
+  assert.equal(result.captured, true);
+  assert.equal(result.suggestedName, "Ada");
+  assert.equal(getSuggestedPlayerName("snake", storage), "Ada");
+  assert.equal(
+    storage.getItem(GAME_SUGGESTED_NAME_STORAGE_KEYS.snake),
+    "Ada"
+  );
+});
+
+runTest("suggested name wins over localStorage for autofill", () => {
+  const storage = createMemoryStorage({
+    [GAME_SUGGESTED_NAME_STORAGE_KEYS.bounch]: "FromToken",
+  });
+  assert.equal(
+    resolvePlayerNameForAutofill("bounch", "FromLocal", storage),
+    "FromToken"
+  );
+  assert.equal(
+    resolvePlayerNameForAutofill("snake", "FromLocal", createMemoryStorage()),
+    "FromLocal"
+  );
 });
 
 console.log("\nAll mango game identity tests passed.");

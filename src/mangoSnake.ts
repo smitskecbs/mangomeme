@@ -17,6 +17,7 @@ import {
   shouldShowSnakeSessionControls,
   type SnakeSessionState,
 } from "./snakeSessionControls.ts";
+import { resolvePlayerNameForAutofill } from "./mangoGameIdentity.ts";
 
 const CONFIG = {
   gridCells: 18,
@@ -237,9 +238,10 @@ function runMangoSnake(
 
   function loadPlayerName(): string {
     try {
-      return localStorage.getItem(CONFIG.playerNameKey) || "";
+      const saved = localStorage.getItem(CONFIG.playerNameKey) || "";
+      return resolvePlayerNameForAutofill("snake", saved);
     } catch {
-      return "";
+      return resolvePlayerNameForAutofill("snake", "");
     }
   }
 

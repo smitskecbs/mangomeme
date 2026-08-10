@@ -94,4 +94,37 @@ runTest("valid api response detection", () => {
   assert.equal(isBounchHighscoreApiResponse(null), false);
 });
 
+runTest("verified XP with unlock is shown", () => {
+  const message = formatBounchScoreResult(
+    {
+      ok: true,
+      personalBest: true,
+      personalBestImproved: true,
+      isNewGlobal: false,
+      bestLevel: 4,
+      rank: 2,
+      identity: { verified: true },
+      xp: { awarded: 5, dailyPlay: 1, unlock: 4 },
+    },
+    4
+  );
+  assert.match(message, /Game XP: \+5/);
+  assert.match(message, /daily \+1/);
+  assert.match(message, /unlock \+4/);
+});
+
+runTest("unverified Bounch submit shows no XP line", () => {
+  const message = formatBounchScoreResult(
+    {
+      ok: true,
+      bestLevel: 2,
+      rank: 5,
+      identity: { verified: false },
+      xp: { awarded: 0, dailyPlay: 0, unlock: 0 },
+    },
+    2
+  );
+  assert.doesNotMatch(message, /Game XP/);
+});
+
 console.log("\nAll bounch score result tests passed.");

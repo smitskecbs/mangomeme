@@ -127,4 +127,58 @@ runTest("valid api response detection", () => {
   assert.equal(isSnakeHighscoreApiResponse(null), false);
 });
 
+runTest("verified XP awarded is shown", () => {
+  const message = formatSnakeScoreResult(
+    {
+      ok: true,
+      personalBest: true,
+      personalBestImproved: true,
+      isNewGlobal: false,
+      score: 100,
+      personalBestScore: 100,
+      rank: 2,
+      identity: { verified: true },
+      xp: { awarded: 1, dailyPlay: 1, unlock: 0 },
+    },
+    100
+  );
+  assert.match(message.body, /Game XP: \+1/);
+  assert.match(message.body, /daily \+1/);
+});
+
+runTest("verified XP already claimed is shown", () => {
+  const message = formatSnakeScoreResult(
+    {
+      ok: true,
+      personalBest: false,
+      personalBestImproved: false,
+      score: 50,
+      personalBestScore: 100,
+      rank: 3,
+      globalHighScore: 200,
+      globalHighScoreName: "Ada",
+      identity: { verified: true },
+      xp: { awarded: 0, dailyPlay: 0, unlock: 0 },
+    },
+    50
+  );
+  assert.match(message.body, /Game XP: already claimed today/);
+});
+
+runTest("unverified submit shows no XP line", () => {
+  const message = formatSnakeScoreResult(
+    {
+      ok: true,
+      personalBest: true,
+      personalBestImproved: true,
+      isNewGlobal: true,
+      score: 900,
+      identity: { verified: false },
+      xp: { awarded: 0, dailyPlay: 0, unlock: 0 },
+    },
+    900
+  );
+  assert.doesNotMatch(message.body, /Game XP/);
+});
+
 console.log("\nAll snake score result tests passed.");

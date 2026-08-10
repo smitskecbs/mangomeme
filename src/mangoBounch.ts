@@ -17,6 +17,7 @@ import {
   BOUNCH_PLAYER_NAME_KEY,
   validateBounchPlayerName,
 } from "./bounchPlayerName.ts";
+import { resolvePlayerNameForAutofill } from "./mangoGameIdentity.ts";
 import {
   formatBounchScoreResult,
   isBounchHighscoreApiResponse,
@@ -778,9 +779,12 @@ function runMangoBounch(
     try {
       const raw = localStorage.getItem(CONFIG.playerNameKey) || "";
       const validated = validateBounchPlayerName(raw);
-      return validated.ok ? validated.name : "";
+      const saved = validated.ok ? validated.name : "";
+      const resolved = resolvePlayerNameForAutofill("bounch", saved);
+      const resolvedValidated = validateBounchPlayerName(resolved);
+      return resolvedValidated.ok ? resolvedValidated.name : saved;
     } catch {
-      return "";
+      return resolvePlayerNameForAutofill("bounch", "");
     }
   }
 
@@ -1118,7 +1122,7 @@ function runMangoBounch(
     updateSessionControls();
 
     if (setupPlayerNameInput) {
-      setupPlayerNameInput.value = "";
+      setupPlayerNameInput.value = loadPlayerName();
       setupPlayerNameInput.disabled = false;
     }
 
