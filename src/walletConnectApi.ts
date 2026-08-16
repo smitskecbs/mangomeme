@@ -6,10 +6,15 @@
  * https://api.mangomeme.fun
  */
 
+import { isManGoLinkToken } from "./walletConnectState.ts";
+
 export const EXPECTED_WALLET_API_ORIGIN = "https://api.mangomeme.fun";
 
-const NETWORK_CORS_ERROR =
-  "Could not reach the wallet API. Possible network or CORS problem.";
+export const WALLET_REACHABILITY_ERROR =
+  "We couldn't reach ManGo verification. Please try again.";
+export const WALLET_TEMPORARY_ERROR =
+  "Verification is temporarily unavailable. Please try again.";
+export const NETWORK_CORS_ERROR = WALLET_REACHABILITY_ERROR;
 
 export function resolveWalletApiBaseUrl(
   raw: string,
@@ -93,13 +98,17 @@ export function interpretWalletVerifyResponse(
     message?: unknown;
   } | null
 ): VerifyResponse {
-  if (!Number.isFinite(status) || status < 200 || status > 299) {
+  if (!Number.isFinite(status) || status === 0) {
+    return { ok: false, error: WALLET_REACHABILITY_ERROR };
+  }
+  if (status >= 500) {
+    return { ok: false, error: WALLET_TEMPORARY_ERROR };
+  }
+  if (status < 200 || status > 299) {
     const error =
       data && typeof data.error === "string" && data.error.trim()
         ? data.error
-        : status === 0
-          ? NETWORK_CORS_ERROR
-          : "Verification failed.";
+        : WALLET_TEMPORARY_ERROR;
     return { ok: false, error };
   }
   if (!data || data.ok !== true) {
@@ -108,13 +117,33 @@ export function interpretWalletVerifyResponse(
       error:
         data && typeof data.error === "string" && data.error.trim()
           ? data.error
-          : "Verification failed.",
+          : WALLET_TEMPORARY_ERROR,
     };
   }
   if (data.challengeId || data.message) {
-    return { ok: false, error: "Verification failed." };
+    return { ok: false, error: WALLET_TEMPORARY_ERROR };
   }
   return { ok: true };
+}
+
+export function interpretWalletChallengeResponse(
+  status: number,
+  data: ChallengeResponse | null,
+  networkError?: string
+): ChallengeResponse {
+  if (networkError || !Number.isFinite(status) || status === 0) {
+    return { ok: false, error: WALLET_REACHABILITY_ERROR };
+  }
+  if (status >= 500) {
+    return { ok: false, error: WALLET_TEMPORARY_ERROR };
+  }
+  if (status < 200 || status > 299 || !data || data.ok !== true) {
+    return {
+      ok: false,
+      error: (data && data.error) || "Invalid request.",
+    };
+  }
+  return data;
 }
 
 async function postJson<T extends { ok?: boolean; error?: string }>(
@@ -149,22 +178,18 @@ export async function requestWalletChallenge(
   token: string,
   wallet: string
 ): Promise<ChallengeResponse> {
+  if (!isManGoLinkToken(token)) {
+    return { ok: false, error: "This verification link is invalid." };
+  }
   const result = await postJson<ChallengeResponse>(
     `${baseUrl}/wallet/challenge`,
     { token, wallet }
   );
-  if (result.networkError) {
-    return { ok: false, error: result.networkError };
-  }
-  if (result.status < 200 || result.status > 299 || !result.data || result.data.ok !== true) {
-    return {
-      ok: false,
-      error:
-        (result.data && result.data.error) ||
-        "Invalid request.",
-    };
-  }
-  return result.data;
+  return interpretWalletChallengeResponse(
+    result.status,
+    result.data,
+    result.networkError
+  );
 }
 
 export async function requestWalletVerify(
@@ -194,5 +219,3 @@ export function bytesToBase64(bytes: Uint8Array): string {
   }
   return btoa(binary);
 }
-
-export { NETWORK_CORS_ERROR };

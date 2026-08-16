@@ -7,6 +7,7 @@
   ],
   "rewrites": [
     { "source": "/mango-labs", "destination": "/mango-labs.html" },
+    { "source": "/wallet-connect/:token", "destination": "/wallet-connect.html" },
     { "source": "/wallet-connect", "destination": "/wallet-connect.html" }
   ]
 }

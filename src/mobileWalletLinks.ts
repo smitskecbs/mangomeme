@@ -42,18 +42,30 @@ export interface MobileOpenAction {
 }
 
 export function buildWalletConnectPageUrl(token: string): string {
-  const trimmed = token.trim();
-  if (!trimmed) {
+  if (typeof token !== "string" || !token) {
     throw new Error("missing_token");
   }
-  return `${WALLET_CONNECT_ORIGIN}${WALLET_CONNECT_PATH}?t=${encodeURIComponent(trimmed)}`;
+  return `${WALLET_CONNECT_ORIGIN}${WALLET_CONNECT_PATH}?t=${encodeURIComponent(token)}`;
+}
+
+/**
+ * Browse-target URL for wallet in-app browsers.
+ * Path form has no `?`, so a wallet that decodeURIComponents the whole
+ * deeplink before splitting path/query cannot glue `?ref=` onto `t=`.
+ */
+export function buildWalletConnectBrowseTargetUrl(token: string): string {
+  if (typeof token !== "string" || !token) {
+    throw new Error("missing_token");
+  }
+  return `${WALLET_CONNECT_ORIGIN}${WALLET_CONNECT_PATH}/${encodeURIComponent(token)}`;
 }
 
 export function buildOfficialBrowseLink(
   wallet: OfficialBrowseWallet,
   token: string
 ): string {
-  const encodedUrl = encodeURIComponent(buildWalletConnectPageUrl(token));
+  const dappUrl = buildWalletConnectBrowseTargetUrl(token);
+  const encodedUrl = encodeURIComponent(dappUrl);
   const encodedRef = encodeURIComponent(WALLET_CONNECT_REF);
   if (wallet === "backpack") {
     return `https://backpack.app/ul/v1/browse/${encodedUrl}?ref=${encodedRef}`;

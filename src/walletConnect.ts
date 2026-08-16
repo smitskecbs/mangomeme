@@ -13,7 +13,9 @@ import {
   DISCOVERY_GRACE_MS,
   WALLET_COPY,
   initialWalletConnectModel,
+  isManGoLinkToken,
   mapApiErrorToView,
+  resolveWalletConnectToken,
   nextViewAfterRetryDiscovery,
   resolveDiscoveryView,
   telegramReturnUrl,
@@ -92,17 +94,19 @@ function render(model: WalletConnectModel, connected: ConnectedWallet | null): v
       ? WALLET_COPY.expired
       : model.view === "used"
         ? WALLET_COPY.used
-        : model.view === "success"
-          ? WALLET_COPY.success
-          : model.view === "missing_token"
-            ? WALLET_COPY.missing_token
-            : model.view === "no_wallets_mobile"
-              ? WALLET_COPY.no_wallets_mobile
-              : model.view === "no_wallets"
-                ? WALLET_COPY.no_wallets
-                : model.view === "discovering"
-                  ? WALLET_COPY.discovering
-                  : WALLET_COPY.idle;
+        : model.view === "invalid"
+          ? WALLET_COPY.invalid
+          : model.view === "success"
+            ? WALLET_COPY.success
+            : model.view === "missing_token"
+              ? WALLET_COPY.missing_token
+              : model.view === "no_wallets_mobile"
+                ? WALLET_COPY.no_wallets_mobile
+                : model.view === "no_wallets"
+                  ? WALLET_COPY.no_wallets
+                  : model.view === "discovering"
+                    ? WALLET_COPY.discovering
+                    : WALLET_COPY.idle;
 
   if (title) {
     title.textContent = copy.title;
@@ -127,7 +131,11 @@ function render(model: WalletConnectModel, connected: ConnectedWallet | null): v
     model.view === "no_wallets" ||
     model.view === "error";
   const showVerify = model.view === "connected" || model.view === "verifying";
-  const showReturn = model.view === "success" || model.view === "expired" || model.view === "used";
+  const showReturn =
+    model.view === "success" ||
+    model.view === "expired" ||
+    model.view === "used" ||
+    model.view === "invalid";
 
   setHidden(
     connectBtn,
@@ -180,7 +188,16 @@ function stripTokenFromUrl(): void {
 
 export function initWalletConnectPage(): void {
   const search = typeof window !== "undefined" ? window.location.search : "";
-  let model = initialWalletConnectModel(search);
+  const pathname = typeof window !== "undefined" ? window.location.pathname : "";
+  let model = initialWalletConnectModel(search, pathname);
+  if (import.meta.env.DEV) {
+    const meta = resolveWalletConnectToken(search, pathname);
+    console.info("[ManGo wallet] token meta", {
+      originalLength: meta.presentedLength,
+      parsedLength: meta.token ? meta.token.length : 0,
+      charsetValid: meta.charsetValid,
+    });
+  }
   let connected: ConnectedWallet | null = null;
   let discoveryPending = false;
   let discoveryTimer = 0;
@@ -359,6 +376,15 @@ export function initWalletConnectPage(): void {
     if (!token || !activeWallet || !api.baseUrl) {
       return;
     }
+    if (!isManGoLinkToken(token)) {
+      model = {
+        ...model,
+        view: "invalid",
+        errorMessage: WALLET_COPY.invalid.body,
+      };
+      render(model, activeWallet);
+      return;
+    }
     model = { ...model, view: "verifying", errorMessage: null };
     render(model, activeWallet);
 
@@ -370,7 +396,12 @@ export function initWalletConnectPage(): void {
     if (!challenge.ok || !challenge.challengeId || !challenge.message) {
       const mapped = mapApiErrorToView(challenge.error);
       model = { ...model, view: mapped.view, errorMessage: mapped.message };
-      if (mapped.view === "expired" || mapped.view === "used" || mapped.view === "success") {
+      if (
+        mapped.view === "expired" ||
+        mapped.view === "used" ||
+        mapped.view === "invalid" ||
+        mapped.view === "success"
+      ) {
         stripTokenFromUrl();
       }
       render(model, activeWallet);
@@ -408,7 +439,7 @@ export function initWalletConnectPage(): void {
         view: mapped.view === "error" ? "connected" : mapped.view,
         errorMessage: mapped.message,
       };
-      if (mapped.view === "expired" || mapped.view === "used") {
+      if (mapped.view === "expired" || mapped.view === "used" || mapped.view === "invalid") {
         stripTokenFromUrl();
       }
       render(model, activeWallet);

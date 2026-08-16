@@ -8,6 +8,7 @@ export type WalletConnectView =
   | "success"
   | "expired"
   | "used"
+  | "invalid"
   | "error"
   | "no_wallets"
   | "no_wallets_mobile";
@@ -20,23 +21,118 @@ export interface WalletConnectModel {
   errorMessage: string | null;
 }
 
-export function parseWalletConnectToken(search: string): string | null {
-  const query = search.startsWith("?") ? search.slice(1) : search;
-  const params = new URLSearchParams(query);
-  const token = params.get("t");
-  if (typeof token !== "string") {
-    return null;
-  }
-  const trimmed = token.trim();
-  if (!trimmed || trimmed.length > 128) {
-    return null;
-  }
-  return trimmed;
+export const MANGO_LINK_TOKEN_PATTERN = /^[A-Za-z0-9_-]{43}$/;
+export const MANGO_LINK_TOKEN_LENGTH = 43;
+
+export function isManGoLinkToken(value: string | null | undefined): value is string {
+  return typeof value === "string" && MANGO_LINK_TOKEN_PATTERN.test(value);
 }
 
-export function initialWalletConnectModel(search: string): WalletConnectModel {
-  const token = parseWalletConnectToken(search);
-  if (!token) {
+export function isBase64UrlCharset(value: string): boolean {
+  return typeof value === "string" && value.length > 0 && /^[A-Za-z0-9_-]+$/.test(value);
+}
+
+/**
+ * Wallets that decode the whole browse deeplink before splitting path/query
+ * can open: /wallet-connect?t=<token>?ref=https://mangomeme.fun
+ * URLSearchParams then treats everything after t= as the token (length 69).
+ * Recover only when the prefix before `?` is an exact valid ManGo token.
+ */
+export function canonicalizeWalletConnectToken(raw: string): string {
+  if (!raw.includes("?")) {
+    return raw;
+  }
+  const first = raw.split("?")[0];
+  if (isManGoLinkToken(first)) {
+    return first;
+  }
+  return raw;
+}
+
+function tokenFromPathname(pathname: string | undefined): string | null {
+  if (typeof pathname !== "string" || !pathname) {
+    return null;
+  }
+  const match = pathname.match(/^\/wallet-connect\/([^/]+)\/?$/);
+  if (!match || !match[1]) {
+    return null;
+  }
+  try {
+    return decodeURIComponent(match[1]);
+  } catch {
+    return match[1];
+  }
+}
+
+export function parseWalletConnectToken(
+  search: string,
+  pathname?: string
+): string | null {
+  const query = search.startsWith("?") ? search.slice(1) : search;
+  const params = new URLSearchParams(query);
+  const fromQuery = params.get("t");
+  const fromPath = tokenFromPathname(pathname);
+  const raw = typeof fromQuery === "string" && fromQuery ? fromQuery : fromPath;
+  if (typeof raw !== "string" || !raw) {
+    return null;
+  }
+  const canonical = canonicalizeWalletConnectToken(raw);
+  if (!canonical || canonical.length > 128) {
+    return null;
+  }
+  return canonical;
+}
+
+export function parseWalletConnectPageLocation(href: string): string | null {
+  try {
+    const url = new URL(href);
+    return parseWalletConnectToken(url.search, url.pathname);
+  } catch {
+    return null;
+  }
+}
+
+export function resolveWalletConnectToken(
+  search: string,
+  pathname?: string
+): {
+  token: string | null;
+  presentedLength: number;
+  charsetValid: boolean;
+  valid: boolean;
+  missing: boolean;
+} {
+  const query = search.startsWith("?") ? search.slice(1) : search;
+  const params = new URLSearchParams(query);
+  const fromQuery = params.get("t");
+  const fromPath = tokenFromPathname(pathname);
+  const raw = typeof fromQuery === "string" && fromQuery ? fromQuery : fromPath;
+  if (typeof raw !== "string" || !raw) {
+    return {
+      token: null,
+      presentedLength: 0,
+      charsetValid: false,
+      valid: false,
+      missing: true,
+    };
+  }
+  const canonical = canonicalizeWalletConnectToken(raw);
+  const valid = isManGoLinkToken(canonical);
+  return {
+    token: valid ? canonical : canonical || null,
+    presentedLength: raw.length,
+    charsetValid: isBase64UrlCharset(canonical),
+    valid,
+    missing: false,
+  };
+}
+
+export function initialWalletConnectModel(
+  search: string,
+  pathname?: string
+): WalletConnectModel {
+  const resolved = resolveWalletConnectToken(search, pathname);
+  if (resolved.missing) {
     return {
       token: null,
       view: "missing_token",
@@ -45,8 +141,17 @@ export function initialWalletConnectModel(search: string): WalletConnectModel {
       errorMessage: null,
     };
   }
+  if (!resolved.valid || !resolved.token) {
+    return {
+      token: null,
+      view: "invalid",
+      walletAddress: null,
+      walletName: null,
+      errorMessage: WALLET_COPY.invalid.body,
+    };
+  }
   return {
-    token,
+    token: resolved.token,
     view: "idle",
     walletAddress: null,
     walletName: null,
@@ -58,14 +163,32 @@ export function mapApiErrorToView(error: string | undefined | null): {
   view: WalletConnectView;
   message: string;
 } {
-  const text = typeof error === "string" ? error : "Verification failed.";
-  if (/expired/i.test(text)) {
+  const text = typeof error === "string" ? error.trim() : "";
+  if (
+    /couldn'?t reach ManGo verification/i.test(text) ||
+    /Could not reach the wallet API/i.test(text) ||
+    /network or CORS/i.test(text)
+  ) {
+    return { view: "error", message: WALLET_COPY.network };
+  }
+  if (text === "This verification link has expired.") {
     return { view: "expired", message: text };
   }
-  if (/already been used/i.test(text)) {
+  if (text === "This verification link has already been used.") {
     return { view: "used", message: text };
   }
-  return { view: "error", message: text || "Something went wrong. Please try again." };
+  if (text === "This verification link is invalid.") {
+    return { view: "invalid", message: text };
+  }
+  if (
+    !text ||
+    text === "Verification failed." ||
+    text === WALLET_COPY.temporary ||
+    /temporarily unavailable/i.test(text)
+  ) {
+    return { view: "error", message: WALLET_COPY.temporary };
+  }
+  return { view: "error", message: text };
 }
 
 export const WALLET_COPY = {
@@ -89,6 +212,12 @@ export const WALLET_COPY = {
     title: "Link already used",
     body: "This verification link has already been used.",
   },
+  invalid: {
+    title: "Link invalid",
+    body: "This verification link is invalid.\nReturn to Telegram and request a new one.",
+  },
+  network: "We couldn't reach ManGo verification. Please try again.",
+  temporary: "Verification is temporarily unavailable. Please try again.",
   success: {
     title: "✅ Wallet verified!",
     body: "Your Solana wallet is now linked to your ManGo Telegram profile.\n\nYou can return to Telegram.\n\n🥭 Welcome back to ManGo.",
@@ -117,6 +246,7 @@ const LOCKED_DISCOVERY_VIEWS: ReadonlySet<WalletConnectView> = new Set([
   "success",
   "expired",
   "used",
+  "invalid",
   "error",
 ]);
 

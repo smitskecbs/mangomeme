@@ -12,6 +12,7 @@ import {
   WALLET_CONNECT_ORIGIN,
   WALLET_CONNECT_REF,
   buildOfficialBrowseLink,
+  buildWalletConnectBrowseTargetUrl,
   buildWalletConnectPageUrl,
   isLikelyMobileBrowser,
   isOfficialBrowseWallet,
@@ -23,18 +24,27 @@ import { shortenWallet } from "../src/shortenWallet.ts";
 import {
   EXPECTED_WALLET_API_ORIGIN,
   NETWORK_CORS_ERROR,
+  WALLET_REACHABILITY_ERROR,
+  WALLET_TEMPORARY_ERROR,
   getWalletApiBaseUrlFromEnv,
+  interpretWalletChallengeResponse,
   interpretWalletVerifyResponse,
+  requestWalletChallenge,
   resolveWalletApiBaseUrl,
 } from "../src/walletConnectApi.ts";
 import {
   DISCOVERY_GRACE_MS,
+  MANGO_LINK_TOKEN_PATTERN,
   WALLET_COPY,
+  canonicalizeWalletConnectToken,
   initialWalletConnectModel,
+  isManGoLinkToken,
   mapApiErrorToView,
   nextViewAfterRetryDiscovery,
+  parseWalletConnectPageLocation,
   parseWalletConnectToken,
   resolveDiscoveryView,
+  resolveWalletConnectToken,
   telegramReturnUrl,
 } from "../src/walletConnectState.ts";
 import {
@@ -49,6 +59,8 @@ import {
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const pending = [];
+const SAMPLE_TOKEN = "Abcdefghijklmnopqrstuvwxyz0123456789-_ABCDE";
+const INVALID_LINK_MESSAGE = "This verification link is invalid.";
 
 function readSrc(relativePath) {
   return readFileSync(path.join(ROOT, relativePath), "utf8");
@@ -73,6 +85,14 @@ function collectUserFacingCopy() {
     WALLET_COPY.connected_status,
     WALLET_COPY.success.title,
     WALLET_COPY.success.body,
+    WALLET_COPY.expired.title,
+    WALLET_COPY.expired.body,
+    WALLET_COPY.used.title,
+    WALLET_COPY.used.body,
+    WALLET_COPY.invalid.title,
+    WALLET_COPY.invalid.body,
+    WALLET_COPY.network,
+    WALLET_COPY.temporary,
   ].join("\n");
 }
 
@@ -110,11 +130,15 @@ runTest("missing token state", () => {
 });
 
 runTest("connect token parsed, no uid required", () => {
-  const token = "abcDEF123_-";
-  const model = initialWalletConnectModel(`?t=${token}`);
+  assert.equal(SAMPLE_TOKEN.length, 43);
+  assert.equal(MANGO_LINK_TOKEN_PATTERN.test(SAMPLE_TOKEN), true);
+  const model = initialWalletConnectModel(`?t=${SAMPLE_TOKEN}`);
   assert.equal(model.view, "idle");
-  assert.equal(model.token, token);
-  assert.equal(parseWalletConnectToken("?t=  padded  "), "padded");
+  assert.equal(model.token, SAMPLE_TOKEN);
+  assert.equal(parseWalletConnectToken("?t=  padded  "), "  padded  ");
+  assert.equal(parseWalletConnectToken("?t=abc-DEF_012"), "abc-DEF_012");
+  assert.equal(parseWalletConnectToken("?t=keep_underscore"), "keep_underscore");
+  assert.equal(parseWalletConnectToken("?t=keep-dash"), "keep-dash");
 });
 
 runTest("shortenWallet display", () => {
@@ -145,7 +169,7 @@ runTest("localhost http allowed for local dev", () => {
   assert.equal(result.baseUrl, "http://127.0.0.1:8787");
 });
 
-runTest("expired / used / error mapping", () => {
+runTest("expired / used / invalid / network / server error mapping", () => {
   assert.equal(
     mapApiErrorToView("This verification link has expired.").view,
     "expired"
@@ -155,9 +179,29 @@ runTest("expired / used / error mapping", () => {
     "used"
   );
   assert.equal(
+    mapApiErrorToView("This verification link is invalid.").view,
+    "invalid"
+  );
+  assert.equal(
     mapApiErrorToView("This wallet is already linked to another ManGo profile.").view,
     "error"
   );
+  const network = mapApiErrorToView(
+    "Could not reach the wallet API. Possible network or CORS problem."
+  );
+  assert.equal(network.view, "error");
+  assert.equal(network.message, WALLET_COPY.network);
+  assert.notEqual(network.view, "expired");
+  const reach = mapApiErrorToView(WALLET_REACHABILITY_ERROR);
+  assert.equal(reach.view, "error");
+  assert.equal(reach.message, WALLET_COPY.network);
+  const server = mapApiErrorToView("Verification failed.");
+  assert.equal(server.view, "error");
+  assert.equal(server.message, WALLET_COPY.temporary);
+  assert.notEqual(server.view, "expired");
+  const fiveHundred = mapApiErrorToView(WALLET_TEMPORARY_ERROR);
+  assert.equal(fiveHundred.view, "error");
+  assert.notEqual(fiveHundred.view, "expired");
 });
 
 runTest("success / expired copy", () => {
@@ -165,6 +209,8 @@ runTest("success / expired copy", () => {
   assert.ok(WALLET_COPY.success.title.includes("Wallet verified"));
   assert.ok(WALLET_COPY.expired.body.includes("expired"));
   assert.ok(WALLET_COPY.used.body.includes("already been used"));
+  assert.ok(WALLET_COPY.invalid.body.includes("invalid"));
+  assert.ok(WALLET_COPY.network.includes("couldn't reach ManGo verification"));
 });
 
 runTest("user-facing copy is wallet-agnostic", () => {
@@ -335,34 +381,41 @@ runTest("Telegram/mobile with no wallet shows mobile instructions", () => {
 });
 
 runTest("same one-time token stays in the target dApp URL", () => {
-  const token = "cafebabedeadbeef0123456789abcdef0123456789abcdef0123456789abcd";
+  const token = SAMPLE_TOKEN;
   const pageUrl = buildWalletConnectPageUrl(token);
+  const browseTarget = buildWalletConnectBrowseTargetUrl(token);
   assert.equal(
     pageUrl,
     `${WALLET_CONNECT_ORIGIN}/wallet-connect?t=${encodeURIComponent(token)}`
   );
+  assert.equal(
+    browseTarget,
+    `${WALLET_CONNECT_ORIGIN}/wallet-connect/${encodeURIComponent(token)}`
+  );
   assert.equal(new URL(pageUrl).searchParams.get("t"), token);
+  assert.equal(parseWalletConnectPageLocation(browseTarget), token);
   for (const wallet of OFFICIAL_BROWSE_WALLETS) {
     const href = buildOfficialBrowseLink(wallet, token);
     const encodedTarget = href.split("/browse/")[1].split("?ref=")[0];
-    assert.equal(decodeURIComponent(encodedTarget), pageUrl);
+    assert.equal(decodeURIComponent(encodedTarget), browseTarget);
+    assert.notEqual(decodeURIComponent(encodedTarget), pageUrl);
   }
 });
 
-runTest("token is URL-encoded in browse links and page URL", () => {
-  const token = "a+b/c=d?e";
-  const pageUrl = buildWalletConnectPageUrl(token);
-  assert.ok(pageUrl.includes(`t=${encodeURIComponent(token)}`));
-  assert.equal(pageUrl.includes("t=a+b/c=d?e"), false);
-  const href = buildOfficialBrowseLink("phantom", token);
-  const encodedTarget = href.split("/browse/")[1].split("?ref=")[0];
-  assert.equal(encodedTarget, encodeURIComponent(pageUrl));
-  assert.equal(decodeURIComponent(encodedTarget), pageUrl);
-  assert.equal(new URL(decodeURIComponent(encodedTarget)).searchParams.get("t"), token);
+runTest("dApp URL is encoded exactly once in browse links", () => {
+  const token = SAMPLE_TOKEN;
+  const dappUrl = buildWalletConnectBrowseTargetUrl(token);
+  const href = buildOfficialBrowseLink("backpack", token);
+  const encodedOnce = encodeURIComponent(dappUrl);
+  const encodedTwice = encodeURIComponent(encodedOnce);
+  assert.equal(href.includes(encodedOnce), true);
+  assert.equal(href.includes(encodedTwice), false);
+  assert.equal(dappUrl.includes("?"), false);
+  assert.equal(dappUrl.includes("t="), false);
 });
 
 runTest("mobile open links never add a uid", () => {
-  const token = "abcDEF123_-";
+  const token = SAMPLE_TOKEN;
   const pageUrl = buildWalletConnectPageUrl(token);
   assert.equal(pageUrl.includes("uid"), false);
   for (const action of listOfficialMobileOpenActions(token)) {
@@ -407,33 +460,162 @@ runTest("Try Again re-runs discovery without reload or challenge", () => {
 });
 
 runTest("Backpack official browse deep link", () => {
-  const token = "token-backpack-1";
+  const token = SAMPLE_TOKEN;
   const href = buildOfficialBrowseLink("backpack", token);
-  const pageUrl = buildWalletConnectPageUrl(token);
+  const browseTarget = buildWalletConnectBrowseTargetUrl(token);
   assert.equal(
     href,
-    `https://backpack.app/ul/v1/browse/${encodeURIComponent(pageUrl)}?ref=${encodeURIComponent(WALLET_CONNECT_REF)}`
+    `https://backpack.app/ul/v1/browse/${encodeURIComponent(browseTarget)}?ref=${encodeURIComponent(WALLET_CONNECT_REF)}`
   );
 });
 
 runTest("Phantom official browse deep link", () => {
-  const token = "token-phantom-1";
+  const token = SAMPLE_TOKEN;
   const href = buildOfficialBrowseLink("phantom", token);
-  const pageUrl = buildWalletConnectPageUrl(token);
+  const browseTarget = buildWalletConnectBrowseTargetUrl(token);
   assert.equal(
     href,
-    `https://phantom.app/ul/browse/${encodeURIComponent(pageUrl)}?ref=${encodeURIComponent(WALLET_CONNECT_REF)}`
+    `https://phantom.app/ul/browse/${encodeURIComponent(browseTarget)}?ref=${encodeURIComponent(WALLET_CONNECT_REF)}`
   );
 });
 
 runTest("Solflare official browse deep link", () => {
-  const token = "token-solflare-1";
+  const token = SAMPLE_TOKEN;
   const href = buildOfficialBrowseLink("solflare", token);
-  const pageUrl = buildWalletConnectPageUrl(token);
+  const browseTarget = buildWalletConnectBrowseTargetUrl(token);
   assert.equal(
     href,
-    `https://solflare.com/ul/v1/browse/${encodeURIComponent(pageUrl)}?ref=${encodeURIComponent(WALLET_CONNECT_REF)}`
+    `https://solflare.com/ul/v1/browse/${encodeURIComponent(browseTarget)}?ref=${encodeURIComponent(WALLET_CONNECT_REF)}`
   );
+});
+
+function browseTargetUrlOnce(href) {
+  const encoded = href.split("/browse/")[1].split("?ref=")[0];
+  return decodeURIComponent(encoded);
+}
+
+function naiveWholeHrefOpenedDappUrl(href) {
+  const decoded = decodeURIComponent(href);
+  return decoded.split("/browse/")[1];
+}
+
+function tokenFromOpenedPage(openedUrl) {
+  return parseWalletConnectPageLocation(openedUrl);
+}
+
+function tokenFromBrowseHref(href) {
+  return tokenFromOpenedPage(browseTargetUrlOnce(href));
+}
+
+function tokenFromNaiveBackpackOpen(href) {
+  return tokenFromOpenedPage(naiveWholeHrefOpenedDappUrl(href));
+}
+
+function legacyQueryBrowseLink(wallet, token) {
+  const encodedUrl = encodeURIComponent(buildWalletConnectPageUrl(token));
+  const encodedRef = encodeURIComponent(WALLET_CONNECT_REF);
+  if (wallet === "backpack") {
+    return `https://backpack.app/ul/v1/browse/${encodedUrl}?ref=${encodedRef}`;
+  }
+  if (wallet === "phantom") {
+    return `https://phantom.app/ul/browse/${encodedUrl}?ref=${encodedRef}`;
+  }
+  return `https://solflare.com/ul/v1/browse/${encodedUrl}?ref=${encodedRef}`;
+}
+
+runTest("source token length is 43 and base64url", () => {
+  assert.equal(SAMPLE_TOKEN.length, 43);
+  assert.equal(isManGoLinkToken(SAMPLE_TOKEN), true);
+  assert.equal(/[A-Za-z]/.test(SAMPLE_TOKEN), true);
+  assert.equal(/[0-9]/.test(SAMPLE_TOKEN), true);
+  assert.equal(SAMPLE_TOKEN.includes("-"), true);
+  assert.equal(SAMPLE_TOKEN.includes("_"), true);
+});
+
+runTest("raw token survives URLSearchParams and challenge JSON", () => {
+  const token = SAMPLE_TOKEN;
+  assert.equal(parseWalletConnectToken(`?t=${token}`), token);
+  assert.equal(parseWalletConnectToken(`?t=${encodeURIComponent(token)}`), token);
+  const search = new URL(buildWalletConnectPageUrl(token)).search;
+  assert.equal(parseWalletConnectToken(search), token);
+  const body = JSON.stringify({ token: parseWalletConnectToken(search), wallet: "W" });
+  assert.equal(JSON.parse(body).token, token);
+  assert.equal(JSON.parse(body).token.length, 43);
+});
+
+runTest("no trim mutation on wallet-connect token parse", () => {
+  assert.equal(parseWalletConnectToken("?t=  padded  "), "  padded  ");
+  const parseSrc = readSrc("src/walletConnectState.ts");
+  const fnStart = parseSrc.indexOf("export function parseWalletConnectToken");
+  const fnEnd = parseSrc.indexOf("export function parseWalletConnectPageLocation");
+  const parseFn = parseSrc.slice(fnStart, fnEnd);
+  assert.equal(parseFn.includes(".trim()"), false);
+});
+
+runTest("legacy query browse naive decode mutates token to length 69", () => {
+  const token = SAMPLE_TOKEN;
+  const href = legacyQueryBrowseLink("backpack", token);
+  const opened = naiveWholeHrefOpenedDappUrl(href);
+  const mutated = new URL(opened).searchParams.get("t");
+  assert.equal(mutated, `${token}?ref=${WALLET_CONNECT_REF}`);
+  assert.equal(mutated.length, 69);
+  assert.equal(isManGoLinkToken(mutated), false);
+});
+
+runTest("Backpack realistic browse roundtrip keeps exact 43-char token", () => {
+  const token = SAMPLE_TOKEN;
+  const href = buildOfficialBrowseLink("backpack", token);
+  const official = tokenFromBrowseHref(href);
+  const naive = tokenFromNaiveBackpackOpen(href);
+  assert.equal(official, token);
+  assert.equal(naive, token);
+  assert.equal(official.length, 43);
+  assert.equal(MANGO_LINK_TOKEN_PATTERN.test(official), true);
+});
+
+runTest("Phantom realistic browse roundtrip keeps exact 43-char token", () => {
+  const token = SAMPLE_TOKEN;
+  const href = buildOfficialBrowseLink("phantom", token);
+  assert.equal(tokenFromBrowseHref(href), token);
+  assert.equal(tokenFromNaiveBackpackOpen(href), token);
+  assert.equal(tokenFromBrowseHref(href).length, 43);
+  assert.equal(MANGO_LINK_TOKEN_PATTERN.test(tokenFromBrowseHref(href)), true);
+});
+
+runTest("Solflare realistic browse roundtrip keeps exact 43-char token", () => {
+  const token = SAMPLE_TOKEN;
+  const href = buildOfficialBrowseLink("solflare", token);
+  assert.equal(tokenFromBrowseHref(href), token);
+  assert.equal(tokenFromNaiveBackpackOpen(href), token);
+  assert.equal(tokenFromBrowseHref(href).length, 43);
+  assert.equal(MANGO_LINK_TOKEN_PATTERN.test(tokenFromBrowseHref(href)), true);
+});
+
+runTest("underscore and dash tokens survive parse and deeplink", () => {
+  const token = SAMPLE_TOKEN;
+  assert.equal(token.includes("_"), true);
+  assert.equal(token.includes("-"), true);
+  assert.equal(parseWalletConnectToken(`?t=${token}`), token);
+  assert.equal(
+    parseWalletConnectToken("", `/wallet-connect/${encodeURIComponent(token)}`),
+    token
+  );
+  for (const wallet of OFFICIAL_BROWSE_WALLETS) {
+    assert.equal(tokenFromBrowseHref(buildOfficialBrowseLink(wallet, token)), token);
+    assert.equal(tokenFromNaiveBackpackOpen(buildOfficialBrowseLink(wallet, token)), token);
+  }
+});
+
+runTest("browse target is decoded once, not twice", () => {
+  const token = SAMPLE_TOKEN;
+  const href = buildOfficialBrowseLink("phantom", token);
+  const encoded = href.split("/browse/")[1].split("?ref=")[0];
+  const once = decodeURIComponent(encoded);
+  assert.equal(once, buildWalletConnectBrowseTargetUrl(token));
+  assert.equal(once.startsWith("https://mangomeme.fun/wallet-connect/"), true);
+  assert.equal(once.includes("?"), false);
+  assert.equal(tokenFromBrowseHref(href), token);
+  assert.equal(once.includes("%"), false);
 });
 
 runTest("unsupported wallet gets no invented deeplink", () => {
@@ -484,6 +666,59 @@ runTest("expired/used token mapping is unchanged", () => {
   );
   assert.equal(WALLET_COPY.expired.body.includes("expired"), true);
   assert.equal(WALLET_COPY.used.body.includes("already been used"), true);
+});
+
+runTest("network and 500 are never classified as expired", () => {
+  assert.equal(mapApiErrorToView(NETWORK_CORS_ERROR).view, "error");
+  assert.equal(mapApiErrorToView(WALLET_REACHABILITY_ERROR).view, "error");
+  assert.equal(
+    interpretWalletVerifyResponse(0, { ok: false, error: "This verification link has expired." })
+      .error,
+    WALLET_REACHABILITY_ERROR
+  );
+  assert.equal(
+    interpretWalletVerifyResponse(500, {
+      ok: false,
+      error: "This verification link has expired.",
+    }).error,
+    WALLET_TEMPORARY_ERROR
+  );
+  assert.equal(
+    interpretWalletChallengeResponse(0, {
+      ok: false,
+      error: "This verification link has expired.",
+    }).error,
+    WALLET_REACHABILITY_ERROR
+  );
+  assert.equal(
+    interpretWalletChallengeResponse(
+      500,
+      { ok: false, error: "This verification link has expired." }
+    ).error,
+    WALLET_TEMPORARY_ERROR
+  );
+  assert.equal(
+    mapApiErrorToView(
+      interpretWalletChallengeResponse(500, {
+        ok: false,
+        error: "This verification link has expired.",
+      }).error
+    ).view,
+    "error"
+  );
+});
+
+runTest("valid challenge response stays on the connect flow", () => {
+  const result = interpretWalletChallengeResponse(200, {
+    ok: true,
+    challengeId: "cid",
+    message: "ManGo Wallet Verification",
+    expiresAt: 1,
+  });
+  assert.equal(result.ok, true);
+  assert.equal(result.challengeId, "cid");
+  assert.equal(mapApiErrorToView(undefined).view, "error");
+  assert.notEqual(mapApiErrorToView(undefined).view, "expired");
 });
 
 function mockPublicKey(address = "7AbcDEFG9XYZMango") {
@@ -761,6 +996,7 @@ runTest("frontend verify success requires HTTP 2xx and ok true only", () => {
   assert.equal(interpretWalletVerifyResponse(200, { ok: false, error: "nope" }).ok, false);
   assert.equal(interpretWalletVerifyResponse(400, { ok: false, error: "bad" }).ok, false);
   assert.equal(interpretWalletVerifyResponse(500, { ok: true }).ok, false);
+  assert.equal(interpretWalletVerifyResponse(500, { ok: true }).error, WALLET_TEMPORARY_ERROR);
   assert.equal(interpretWalletVerifyResponse(0, { ok: false }).ok, false);
   assert.equal(interpretWalletVerifyResponse(0, { ok: false }).error, NETWORK_CORS_ERROR);
   assert.equal(
@@ -785,6 +1021,168 @@ runTest("wallet-connect page does not force success after signing", () => {
   assert.ok(verifyBlock.includes("signMessageWithWallet"));
   const signCatch = verifyBlock.indexOf("Signature cancelled");
   assert.ok(signCatch >= 0 && signCatch < successAssign);
+});
+
+runTest("token after page parse is length 43 and base64url", () => {
+  const token = SAMPLE_TOKEN;
+  const queryModel = initialWalletConnectModel(`?t=${token}`);
+  const pathModel = initialWalletConnectModel("", `/wallet-connect/${token}`);
+  const browseOpened = browseTargetUrlOnce(buildOfficialBrowseLink("backpack", token));
+  const parsed = parseWalletConnectPageLocation(browseOpened);
+  assert.equal(queryModel.token, token);
+  assert.equal(pathModel.token, token);
+  assert.equal(parsed, token);
+  assert.equal(parsed.length, 43);
+  assert.equal(MANGO_LINK_TOKEN_PATTERN.test(parsed), true);
+});
+
+runTest("invalid length is rejected before API", async () => {
+  const shortToken = SAMPLE_TOKEN.slice(0, 42);
+  const longToken = `${SAMPLE_TOKEN}x`;
+  assert.equal(isManGoLinkToken(shortToken), false);
+  assert.equal(isManGoLinkToken(longToken), false);
+  assert.equal(initialWalletConnectModel(`?t=${shortToken}`).view, "invalid");
+  assert.equal(initialWalletConnectModel(`?t=${longToken}`).view, "invalid");
+  assert.ok(WALLET_COPY.invalid.body.includes(INVALID_LINK_MESSAGE));
+  let called = 0;
+  const orig = globalThis.fetch;
+  globalThis.fetch = async () => {
+    called += 1;
+    return new Response("{}", { status: 200 });
+  };
+  try {
+    const short = await requestWalletChallenge("https://api.mangomeme.fun", shortToken, "W");
+    const long = await requestWalletChallenge("https://api.mangomeme.fun", longToken, "W");
+    assert.equal(short.ok, false);
+    assert.equal(short.error, INVALID_LINK_MESSAGE);
+    assert.equal(long.ok, false);
+    assert.equal(long.error, INVALID_LINK_MESSAGE);
+    assert.equal(called, 0);
+  } finally {
+    globalThis.fetch = orig;
+  }
+});
+
+runTest("invalid charset is rejected before API", async () => {
+  const bad = `${SAMPLE_TOKEN.slice(0, 42)}+`;
+  assert.equal(bad.length, 43);
+  assert.equal(isManGoLinkToken(bad), false);
+  assert.equal(initialWalletConnectModel(`?t=${encodeURIComponent(bad)}`).view, "invalid");
+  let called = 0;
+  const orig = globalThis.fetch;
+  globalThis.fetch = async () => {
+    called += 1;
+    return new Response("{}", { status: 200 });
+  };
+  try {
+    const result = await requestWalletChallenge("https://api.mangomeme.fun", bad, "W");
+    assert.equal(result.ok, false);
+    assert.equal(result.error, INVALID_LINK_MESSAGE);
+    assert.equal(called, 0);
+  } finally {
+    globalThis.fetch = orig;
+  }
+});
+
+runTest("challenge request posts the exact same 43-char token", async () => {
+  const token = SAMPLE_TOKEN;
+  const parsed = parseWalletConnectPageLocation(buildWalletConnectBrowseTargetUrl(token));
+  let posted;
+  const orig = globalThis.fetch;
+  globalThis.fetch = async (_url, init) => {
+    posted = JSON.parse(init.body);
+    return new Response(
+      JSON.stringify({ ok: true, challengeId: "cid", message: "ManGo Wallet Verification" }),
+      { status: 200, headers: { "content-type": "application/json" } }
+    );
+  };
+  try {
+    const result = await requestWalletChallenge("https://api.mangomeme.fun", parsed, "WalletAddr");
+    assert.equal(result.ok, true);
+    assert.equal(posted.token, token);
+    assert.equal(posted.token.length, 43);
+    assert.equal(posted.token, parsed);
+  } finally {
+    globalThis.fetch = orig;
+  }
+});
+
+runTest("no signMessage attempt before valid challenge", () => {
+  const connectSrc = readSrc("src/walletConnect.ts");
+  const verifyStart = connectSrc.indexOf('verifyBtn?.addEventListener("click"');
+  const verifyBlock = connectSrc.slice(verifyStart);
+  const guardAt = verifyBlock.indexOf("isManGoLinkToken(token)");
+  const challengeAt = verifyBlock.indexOf("requestWalletChallenge");
+  const challengeFailAt = verifyBlock.indexOf("if (!challenge.ok");
+  const signAt = verifyBlock.indexOf("signMessageWithWallet");
+  assert.ok(guardAt >= 0 && guardAt < challengeAt);
+  assert.ok(challengeAt >= 0 && challengeAt < challengeFailAt);
+  assert.ok(challengeFailAt >= 0 && challengeFailAt < signAt);
+  assert.ok(verifyBlock.includes('view: "invalid"'));
+});
+
+runTest("signMessage does occur after valid challenge", () => {
+  const connectSrc = readSrc("src/walletConnect.ts");
+  const verifyStart = connectSrc.indexOf('verifyBtn?.addEventListener("click"');
+  const verifyBlock = connectSrc.slice(verifyStart);
+  const challengeAt = verifyBlock.indexOf("requestWalletChallenge");
+  const challengeOkGate = verifyBlock.indexOf("if (!challenge.ok || !challenge.challengeId || !challenge.message)");
+  const signAt = verifyBlock.indexOf("signMessageWithWallet");
+  const returnAfterFail = verifyBlock.indexOf("return;", challengeOkGate);
+  assert.ok(challengeAt < challengeOkGate);
+  assert.ok(returnAfterFail >= 0 && returnAfterFail < signAt);
+  assert.ok(signAt > challengeOkGate);
+});
+
+runTest("no raw token in production logs", () => {
+  const connectSrc = readSrc("src/walletConnect.ts");
+  const apiSrc = readSrc("src/walletConnectApi.ts");
+  const stateSrc = readSrc("src/walletConnectState.ts");
+  const linksSrc = readSrc("src/mobileWalletLinks.ts");
+  assert.equal(/console\.log/.test(connectSrc), false);
+  assert.equal(/console\.log/.test(apiSrc), false);
+  assert.equal(/console\.log/.test(stateSrc), false);
+  assert.equal(/console\.log/.test(linksSrc), false);
+  assert.ok(connectSrc.includes("import.meta.env.DEV"));
+  assert.ok(connectSrc.includes("originalLength"));
+  assert.ok(connectSrc.includes("parsedLength"));
+  assert.ok(connectSrc.includes("charsetValid"));
+  const metaStart = connectSrc.indexOf('console.info("[ManGo wallet] token meta"');
+  assert.ok(metaStart >= 0);
+  const metaWindow = connectSrc.slice(Math.max(0, metaStart - 160), metaStart + 280);
+  assert.ok(metaWindow.includes("if (import.meta.env.DEV)"));
+  assert.ok(metaWindow.includes("originalLength"));
+  assert.ok(metaWindow.includes("parsedLength"));
+  assert.ok(metaWindow.includes("charsetValid"));
+  assert.equal(/token:\s/.test(metaWindow.slice(160)), false);
+  assert.equal(/console\.info\([^)]*token/.test(apiSrc), false);
+});
+
+runTest("mangled t=token?ref= recovers the original 43-char token", () => {
+  const token = SAMPLE_TOKEN;
+  const mangled = `${token}?ref=${WALLET_CONNECT_REF}`;
+  assert.equal(mangled.length, 69);
+  const resolved = resolveWalletConnectToken(`?t=${mangled}`);
+  assert.equal(resolved.presentedLength, 69);
+  assert.equal(resolved.token, token);
+  assert.equal(resolved.valid, true);
+  assert.equal(initialWalletConnectModel(`?t=${mangled}`).token, token);
+  assert.equal(canonicalizeWalletConnectToken(mangled), token);
+  const arbitrary = `abc?ref=${WALLET_CONNECT_REF}`;
+  assert.equal(canonicalizeWalletConnectToken(arbitrary), arbitrary);
+  assert.equal(isManGoLinkToken(canonicalizeWalletConnectToken(arbitrary)), false);
+  assert.equal(initialWalletConnectModel(`?t=${arbitrary}`).view, "invalid");
+  assert.equal(initialWalletConnectModel(`?t=${arbitrary}`).token, null);
+});
+
+runTest("vercel rewrites path-form wallet-connect URLs", () => {
+  const vercel = JSON.parse(readSrc("vercel.json"));
+  assert.equal(
+    vercel.rewrites.some(
+      (rule) => rule.source === "/wallet-connect/:token" && rule.destination === "/wallet-connect.html"
+    ),
+    true
+  );
 });
 
 await Promise.all(pending);
