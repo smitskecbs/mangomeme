@@ -1,9 +1,12 @@
 /**
  * Frontend wallet-connect route helpers.
- * Run with: node tests/wallet-connect.test.js
+ * Run with: node --import ./tests/_ts-register.mjs tests/wallet-connect.test.js
  */
 
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
 import { shortenWallet } from "../src/shortenWallet.ts";
 import {
   EXPECTED_WALLET_API_ORIGIN,
@@ -17,6 +20,30 @@ import {
   parseWalletConnectToken,
   telegramReturnUrl,
 } from "../src/walletConnectState.ts";
+
+const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
+
+function readSrc(relativePath) {
+  return readFileSync(path.join(ROOT, relativePath), "utf8");
+}
+
+function collectUserFacingCopy() {
+  return [
+    readSrc("wallet-connect.html"),
+    readSrc("src/walletConnect.ts"),
+    readSrc("src/walletConnectState.ts"),
+    WALLET_COPY.missing_token.title,
+    WALLET_COPY.missing_token.body,
+    WALLET_COPY.idle.title,
+    WALLET_COPY.idle.body,
+    WALLET_COPY.no_wallets.title,
+    WALLET_COPY.no_wallets.body,
+    WALLET_COPY.connect_failed,
+    WALLET_COPY.connected_status,
+    WALLET_COPY.success.title,
+    WALLET_COPY.success.body,
+  ].join("\n");
+}
 
 function runTest(name, fn) {
   try {
@@ -93,6 +120,59 @@ runTest("success / expired copy", () => {
   assert.ok(WALLET_COPY.success.title.includes("Wallet verified"));
   assert.ok(WALLET_COPY.expired.body.includes("expired"));
   assert.ok(WALLET_COPY.used.body.includes("already been used"));
+});
+
+runTest("user-facing copy is wallet-agnostic", () => {
+  const copy = collectUserFacingCopy();
+  assert.equal(/Phantom and Solflare/i.test(copy), false);
+  assert.equal(/Try Phantom or Solflare/i.test(copy), false);
+  assert.equal(/Install Phantom or Solflare/i.test(copy), false);
+  assert.equal(/Supports Phantom/i.test(copy), false);
+  assert.equal(/\bPhantom\b/.test(copy), false);
+  assert.equal(/\bSolflare\b/.test(copy), false);
+  assert.ok(WALLET_COPY.idle.title.includes("Connect your Solana Wallet"));
+  assert.ok(WALLET_COPY.idle.body.includes("compatible Solana wallet"));
+  assert.ok(WALLET_COPY.idle.body.includes("No transaction will be sent"));
+  assert.ok(WALLET_COPY.idle.body.includes("never gets control of your wallet"));
+  assert.ok(WALLET_COPY.no_wallets.body.includes("No compatible Solana wallet was detected"));
+  assert.ok(WALLET_COPY.no_wallets.body.includes("Install or open a Solana wallet"));
+  assert.ok(!WALLET_COPY.no_wallets.body.includes("Phantom"));
+  assert.ok(WALLET_COPY.connect_failed.includes("compatible Solana wallet"));
+  assert.ok(WALLET_COPY.connected_status.includes("no transaction will be sent"));
+  assert.ok(readSrc("wallet-connect.html").includes("Compatible Solana wallets are detected automatically"));
+  assert.ok(readSrc("wallet-connect.html").includes("Connect Wallet"));
+});
+
+runTest("detected wallet names stay dynamic", () => {
+  const connectSrc = readSrc("src/walletConnect.ts");
+  assert.ok(connectSrc.includes("button.textContent = wallet.name"));
+  const discovered = [{ name: "Backpack" }, { name: "Phantom" }, { name: "Solflare" }];
+  assert.deepEqual(
+    discovered.map((wallet) => wallet.name),
+    ["Backpack", "Phantom", "Solflare"]
+  );
+});
+
+runTest("Wallet Standard discovery still accepts named providers including Backpack", () => {
+  const walletsSrc = readSrc("src/solanaWallets.ts");
+  assert.ok(walletsSrc.includes("standard.set(wallet.name, wallet)"));
+  assert.ok(walletsSrc.includes("name: wallet.name"));
+  assert.ok(walletsSrc.includes('name: "Phantom"'));
+  assert.ok(walletsSrc.includes('name: "Solflare"'));
+  assert.equal(/name:\s*"Backpack"/.test(walletsSrc), false);
+  assert.equal(/jupiter/i.test(walletsSrc), false);
+  assert.ok(walletsSrc.includes("solana:signMessage"));
+  assert.equal(/signTransaction/.test(walletsSrc), true);
+  assert.ok(walletsSrc.includes("Never signTransaction / sendTransaction"));
+});
+
+runTest("signMessage only, no secrets in copy", () => {
+  const copy = collectUserFacingCopy();
+  assert.ok(/sign a (verification )?message/i.test(copy));
+  assert.equal(/private key/i.test(copy), false);
+  assert.equal(/seed phrase/i.test(copy), false);
+  assert.equal(/BOT_TOKEN/.test(copy), false);
+  assert.ok(WALLET_COPY.connected_status.includes("no transaction"));
 });
 
 runTest("return to Telegram has no token", () => {

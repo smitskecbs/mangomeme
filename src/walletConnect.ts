@@ -109,7 +109,7 @@ function render(model: WalletConnectModel, connected: ConnectedWallet | null): v
   if (status) {
     if (model.view === "connected") {
       status.hidden = false;
-      status.textContent = "Wallet connected. Sign a message to verify ownership — no transaction will be sent.";
+      status.textContent = WALLET_COPY.connected_status;
     } else {
       status.hidden = true;
       status.textContent = "";
@@ -168,7 +168,7 @@ export function initWalletConnectPage(): void {
       const message =
         err instanceof Error && /reject|cancel|denied/i.test(err.message)
           ? "Wallet connection was cancelled."
-          : "Could not connect wallet. Try Phantom or Solflare.";
+          : WALLET_COPY.connect_failed;
       model = { ...model, view: "error", errorMessage: message };
       connected = null;
     }

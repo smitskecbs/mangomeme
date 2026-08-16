@@ -73,7 +73,7 @@ export const WALLET_COPY = {
   },
   idle: {
     title: "🥭 Connect your Solana Wallet",
-    body: "Verify your wallet to link it to your ManGo Telegram profile.",
+    body: "Verify a Solana wallet to link it to your ManGo Telegram profile.\n\nConnect a compatible Solana wallet and sign a verification message.\n\nNo transaction will be sent.\nManGo never gets control of your wallet.",
   },
   expired: {
     title: "Link expired",
@@ -89,8 +89,12 @@ export const WALLET_COPY = {
   },
   no_wallets: {
     title: "🥭 Connect your Solana Wallet",
-    body: "No Solana wallet found. Install Phantom or Solflare, then open this page in your browser.",
+    body: "No compatible Solana wallet was detected.\n\nInstall or open a Solana wallet in your browser and try again.",
   },
+  connect_failed:
+    "Could not connect wallet. Choose a compatible Solana wallet installed in your browser.",
+  connected_status:
+    "Wallet connected. Sign a message to verify ownership — no transaction will be sent.",
 } as const;
 
 export function telegramReturnUrl(botUsername: string): string {
