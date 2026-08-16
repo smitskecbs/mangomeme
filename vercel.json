@@ -6,6 +6,7 @@
     { "source": "/just-for-fun.html", "destination": "/mango-labs", "permanent": true }
   ],
   "rewrites": [
-    { "source": "/mango-labs", "destination": "/mango-labs.html" }
+    { "source": "/mango-labs", "destination": "/mango-labs.html" },
+    { "source": "/wallet-connect", "destination": "/wallet-connect.html" }
   ]
 }
