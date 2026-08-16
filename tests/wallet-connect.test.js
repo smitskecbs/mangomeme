@@ -26,6 +26,7 @@ import {
   resolveWalletApiBaseUrl,
 } from "../src/walletConnectApi.ts";
 import {
+  DISCOVERY_GRACE_MS,
   WALLET_COPY,
   initialWalletConnectModel,
   mapApiErrorToView,
@@ -34,8 +35,18 @@ import {
   resolveDiscoveryView,
   telegramReturnUrl,
 } from "../src/walletConnectState.ts";
+import {
+  WALLET_STANDARD_READY,
+  WALLET_STANDARD_REGISTER,
+  connectDiscoveredWallet,
+  createWalletRegistry,
+  describeDiscoveredWallets,
+  isUsableLegacyProvider,
+  signMessageWithWallet,
+} from "../src/solanaWallets.ts";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
+const pending = [];
 
 function readSrc(relativePath) {
   return readFileSync(path.join(ROOT, relativePath), "utf8");
@@ -50,6 +61,8 @@ function collectUserFacingCopy() {
     WALLET_COPY.missing_token.body,
     WALLET_COPY.idle.title,
     WALLET_COPY.idle.body,
+    WALLET_COPY.discovering.title,
+    WALLET_COPY.discovering.body,
     WALLET_COPY.no_wallets.title,
     WALLET_COPY.no_wallets.body,
     WALLET_COPY.no_wallets_mobile.title,
@@ -63,7 +76,21 @@ function collectUserFacingCopy() {
 
 function runTest(name, fn) {
   try {
-    fn();
+    const result = fn();
+    if (result && typeof result.then === "function") {
+      pending.push(
+        result.then(
+          () => {
+            console.log(`✓ ${name}`);
+          },
+          (error) => {
+            console.error(`✗ ${name}`);
+            throw error;
+          }
+        )
+      );
+      return;
+    }
     console.log(`✓ ${name}`);
   } catch (error) {
     console.error(`✗ ${name}`);
@@ -155,6 +182,7 @@ runTest("user-facing copy is wallet-agnostic", () => {
   assert.ok(!WALLET_COPY.no_wallets.body.includes("Phantom"));
   assert.ok(WALLET_COPY.no_wallets_mobile.title.includes("No wallet detected"));
   assert.ok(WALLET_COPY.no_wallets_mobile.body.includes("Telegram or your mobile browser"));
+  assert.ok(WALLET_COPY.discovering.body.includes("Looking for your wallet"));
   assert.ok(!/only these wallets are supported/i.test(copy));
   assert.ok(WALLET_COPY.connect_failed.includes("compatible Solana wallet"));
   assert.ok(WALLET_COPY.connected_status.includes("no transaction will be sent"));
@@ -176,13 +204,16 @@ runTest("Wallet Standard discovery still accepts named providers including Backp
   const walletsSrc = readSrc("src/solanaWallets.ts");
   assert.ok(walletsSrc.includes("standard.set(wallet.name, wallet)"));
   assert.ok(walletsSrc.includes("name: wallet.name"));
-  assert.ok(walletsSrc.includes('name: "Phantom"'));
-  assert.ok(walletsSrc.includes('name: "Solflare"'));
-  assert.equal(/name:\s*"Backpack"/.test(walletsSrc), false);
+  assert.ok(walletsSrc.includes('addLegacy("legacy:phantom", "Phantom"'));
+  assert.ok(walletsSrc.includes('"legacy:solflare"'));
+  assert.ok(walletsSrc.includes('"Solflare"'));
+  assert.ok(walletsSrc.includes('addLegacy("legacy:backpack", "Backpack"'));
   assert.equal(/jupiter/i.test(walletsSrc), false);
   assert.ok(walletsSrc.includes("solana:signMessage"));
   assert.equal(/signTransaction/.test(walletsSrc), true);
   assert.ok(walletsSrc.includes("Never signTransaction / sendTransaction"));
+  assert.ok(walletsSrc.includes(`detail: { register }`));
+  assert.equal(walletsSrc.includes("new Event(WALLET_STANDARD_READY)"), false);
 });
 
 runTest("signMessage only, no secrets in copy", () => {
@@ -269,6 +300,16 @@ runTest("Telegram/mobile with no wallet shows mobile instructions", () => {
       isMobile: true,
       walletCount: 0,
       currentView: "idle",
+      discoveryPending: true,
+    }),
+    "discovering"
+  );
+  assert.equal(
+    resolveDiscoveryView({
+      hasToken: true,
+      isMobile: true,
+      walletCount: 0,
+      currentView: "idle",
     }),
     "no_wallets_mobile"
   );
@@ -346,7 +387,7 @@ runTest("Try Again re-runs discovery without reload or challenge", () => {
       isMobile: true,
       walletCount: 0,
     }),
-    "no_wallets_mobile"
+    "discovering"
   );
   const connectSrc = readSrc("src/walletConnect.ts");
   const tryAgainStart = connectSrc.indexOf('tryAgainBtn?.addEventListener("click"');
@@ -443,4 +484,275 @@ runTest("expired/used token mapping is unchanged", () => {
   assert.equal(WALLET_COPY.used.body.includes("already been used"), true);
 });
 
+function mockPublicKey(address = "7AbcDEFG9XYZMango") {
+  return {
+    toBytes: () => new Uint8Array(32),
+    toBase58: () => address,
+  };
+}
+
+function mockLegacyProvider(flags = {}) {
+  const publicKey = mockPublicKey();
+  return {
+    ...flags,
+    publicKey,
+    async connect() {
+      return { publicKey };
+    },
+    async signMessage(message) {
+      return { signature: new Uint8Array(message.length ? 64 : 64) };
+    },
+  };
+}
+
+function mockStandardWallet(name) {
+  const publicKey = new Uint8Array(32);
+  const account = { address: "7AbcDEFG9XYZMango", publicKey };
+  return {
+    name,
+    accounts: [account],
+    chains: ["solana:mainnet"],
+    features: {
+      "standard:connect": {
+        async connect() {
+          return { accounts: [account] };
+        },
+      },
+      "solana:signMessage": {
+        async signMessage() {
+          return [{ signature: new Uint8Array(64) }];
+        },
+      },
+    },
+  };
+}
+
+function dispatchRegister(target, wallet) {
+  target.dispatchEvent(
+    new CustomEvent(WALLET_STANDARD_REGISTER, {
+      detail: ({ register }) => register(wallet),
+    })
+  );
+}
+
+runTest("initial Wallet Standard registry is empty", () => {
+  const target = new EventTarget();
+  const registry = createWalletRegistry({ target });
+  assert.deepEqual(registry.list(), []);
+  registry.destroy();
+});
+
+runTest("Backpack can register after page initialization", () => {
+  const target = new EventTarget();
+  let changes = 0;
+  const registry = createWalletRegistry({
+    target,
+    onChange() {
+      changes += 1;
+    },
+  });
+  assert.equal(registry.list().length, 0);
+  dispatchRegister(target, mockStandardWallet("Backpack"));
+  const listed = registry.list();
+  assert.equal(listed.length, 1);
+  assert.equal(listed[0].name, "Backpack");
+  assert.equal(listed[0].kind, "standard");
+  assert.ok(changes >= 1);
+  registry.destroy();
+});
+
+runTest("late Wallet Standard registration updates discovery view automatically", () => {
+  assert.equal(
+    resolveDiscoveryView({
+      hasToken: true,
+      isMobile: true,
+      walletCount: 0,
+      currentView: "discovering",
+      discoveryPending: true,
+    }),
+    "discovering"
+  );
+  assert.equal(
+    resolveDiscoveryView({
+      hasToken: true,
+      isMobile: true,
+      walletCount: 1,
+      currentView: "discovering",
+      discoveryPending: true,
+    }),
+    "idle"
+  );
+  assert.equal(
+    resolveDiscoveryView({
+      hasToken: true,
+      isMobile: true,
+      walletCount: 1,
+      currentView: "no_wallets_mobile",
+    }),
+    "idle"
+  );
+  const connectSrc = readSrc("src/walletConnect.ts");
+  assert.ok(connectSrc.includes("onChange()"));
+  assert.ok(connectSrc.includes("syncDiscovery()"));
+  assert.ok(connectSrc.includes("startDiscoveryWindow()"));
+  assert.equal(typeof DISCOVERY_GRACE_MS, "number");
+  assert.ok(DISCOVERY_GRACE_MS >= 1000);
+});
+
+runTest("late registered Backpack can connect and signMessage", () => {
+  const target = new EventTarget();
+  const registry = createWalletRegistry({ target });
+  dispatchRegister(target, mockStandardWallet("Backpack"));
+  const wallet = registry.list()[0];
+  return connectDiscoveredWallet(wallet).then((connected) => {
+    assert.equal(connected.name, "Backpack");
+    assert.equal(connected.kind, "standard");
+    return signMessageWithWallet(connected, "verify mango").then((signature) => {
+      assert.equal(signature instanceof Uint8Array, true);
+      assert.equal(signature.length, 64);
+      registry.destroy();
+    });
+  });
+});
+
+runTest("legacy Backpack provider fallback requires connect and signMessage", () => {
+  assert.equal(isUsableLegacyProvider({ isBackpack: true }), false);
+  assert.equal(
+    isUsableLegacyProvider({ isBackpack: true, connect() {}, signMessage() {} }),
+    true
+  );
+  const target = Object.assign(new EventTarget(), {
+    backpack: mockLegacyProvider({ isBackpack: true }),
+  });
+  const registry = createWalletRegistry({ target });
+  const listed = registry.list();
+  assert.equal(listed.length, 1);
+  assert.equal(listed[0].name, "Backpack");
+  assert.equal(listed[0].kind, "legacy");
+  assert.equal(listed[0].id, "legacy:backpack");
+  registry.destroy();
+});
+
+runTest("window.solana.isBackpack is accepted as Backpack, generic solana is not", () => {
+  const backpackTarget = Object.assign(new EventTarget(), {
+    solana: mockLegacyProvider({ isBackpack: true }),
+  });
+  const backpackRegistry = createWalletRegistry({ target: backpackTarget });
+  assert.equal(backpackRegistry.list()[0]?.name, "Backpack");
+  backpackRegistry.destroy();
+
+  const genericTarget = Object.assign(new EventTarget(), {
+    solana: mockLegacyProvider(),
+  });
+  const genericRegistry = createWalletRegistry({ target: genericTarget });
+  assert.equal(genericRegistry.list().length, 0);
+  genericRegistry.destroy();
+});
+
+runTest("duplicate Backpack registration is deduped", () => {
+  const target = new EventTarget();
+  const registry = createWalletRegistry({ target });
+  dispatchRegister(target, mockStandardWallet("Backpack"));
+  dispatchRegister(target, mockStandardWallet("Backpack"));
+  assert.equal(registry.list().length, 1);
+  Object.assign(target, { backpack: mockLegacyProvider({ isBackpack: true }) });
+  const listed = registry.list();
+  assert.equal(listed.length, 1);
+  assert.equal(listed[0].kind, "standard");
+  registry.destroy();
+});
+
+runTest("wallet that loaded before the app registers via app-ready detail", () => {
+  const target = new EventTarget();
+  const wallet = mockStandardWallet("Backpack");
+  target.addEventListener(WALLET_STANDARD_READY, (event) => {
+    const api = event.detail;
+    if (api && typeof api.register === "function") {
+      api.register(wallet);
+    }
+  });
+  const registry = createWalletRegistry({ target });
+  assert.equal(registry.list()[0]?.name, "Backpack");
+  registry.destroy();
+});
+
+runTest("Phantom and Solflare legacy discovery still works", () => {
+  const target = Object.assign(new EventTarget(), {
+    phantom: { solana: mockLegacyProvider({ isPhantom: true }) },
+    solflare: mockLegacyProvider({ isSolflare: true }),
+  });
+  const registry = createWalletRegistry({ target });
+  const names = registry.list().map((wallet) => wallet.name).sort();
+  assert.deepEqual(names, ["Phantom", "Solflare"]);
+  registry.destroy();
+});
+
+runTest("desktop Backpack via Wallet Standard still works", () => {
+  const target = new EventTarget();
+  const registry = createWalletRegistry({ target });
+  dispatchRegister(target, mockStandardWallet("Backpack"));
+  assert.equal(
+    resolveDiscoveryView({
+      hasToken: true,
+      isMobile: false,
+      walletCount: registry.list().length,
+      currentView: "idle",
+    }),
+    "idle"
+  );
+  registry.destroy();
+});
+
+runTest("mobile deeplink fallback remains after discovery settles with no wallet", () => {
+  assert.equal(
+    resolveDiscoveryView({
+      hasToken: true,
+      isMobile: true,
+      walletCount: 0,
+      currentView: "discovering",
+      discoveryPending: false,
+    }),
+    "no_wallets_mobile"
+  );
+  assert.equal(
+    shouldShowMobileWalletOpen({
+      hasToken: true,
+      isMobile: true,
+      walletCount: 0,
+    }),
+    true
+  );
+});
+
+runTest("debug discovery summary never includes secrets", () => {
+  const summary = describeDiscoveredWallets([
+    { id: "standard:Backpack", name: "Backpack", kind: "standard" },
+  ]);
+  assert.deepEqual(summary, {
+    count: 1,
+    names: ["Backpack"],
+    kinds: ["standard"],
+  });
+  const encoded = JSON.stringify(summary);
+  assert.equal(encoded.includes("t="), false);
+  assert.equal(/uid/i.test(encoded), false);
+  assert.equal(/challenge/i.test(encoded), false);
+  assert.equal(/signature/i.test(encoded), false);
+  const connectSrc = readSrc("src/walletConnect.ts");
+  assert.ok(connectSrc.includes("import.meta.env.DEV"));
+  assert.ok(connectSrc.includes("describeDiscoveredWallets"));
+  assert.equal(/console\.log/.test(connectSrc), false);
+});
+
+runTest("incomplete injected provider is not faked as a wallet", () => {
+  const target = Object.assign(new EventTarget(), {
+    backpack: { isBackpack: true, connect() {} },
+    xnft: { connect() {}, signMessage() {} },
+  });
+  const registry = createWalletRegistry({ target });
+  assert.equal(registry.list().length, 0);
+  registry.destroy();
+});
+
+await Promise.all(pending);
 console.log("wallet-connect tests passed");

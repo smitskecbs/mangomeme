@@ -10,6 +10,7 @@ import {
   requestWalletVerify,
 } from "./walletConnectApi.ts";
 import {
+  DISCOVERY_GRACE_MS,
   WALLET_COPY,
   initialWalletConnectModel,
   mapApiErrorToView,
@@ -21,6 +22,7 @@ import {
 import {
   connectDiscoveredWallet,
   createWalletRegistry,
+  describeDiscoveredWallets,
   signMessageWithWallet,
   type ConnectedWallet,
   type DiscoveredWallet,
@@ -52,10 +54,14 @@ function currentIsMobile(): boolean {
 function renderMobileOpen(model: WalletConnectModel): void {
   const panel = $("wc-mobile-open");
   const links = $("wc-mobile-links");
-  const show = model.view === "no_wallets_mobile" && Boolean(model.token);
+  const retryNote = $("wc-mobile-retry-note");
+  const showPanel =
+    Boolean(model.token) &&
+    (model.view === "no_wallets_mobile" || model.view === "discovering");
+  const showDeeplinks = model.view === "no_wallets_mobile" && Boolean(model.token);
   if (links) {
     links.replaceChildren();
-    if (show && model.token) {
+    if (showDeeplinks && model.token) {
       for (const action of listOfficialMobileOpenActions(model.token)) {
         const link = document.createElement("a");
         link.className = "btn btn-copy wc-mobile-open-btn";
@@ -66,7 +72,8 @@ function renderMobileOpen(model: WalletConnectModel): void {
       }
     }
   }
-  setHidden(panel, !show);
+  setHidden(retryNote, model.view !== "no_wallets_mobile");
+  setHidden(panel, !showPanel);
 }
 
 function render(model: WalletConnectModel, connected: ConnectedWallet | null): void {
@@ -93,7 +100,9 @@ function render(model: WalletConnectModel, connected: ConnectedWallet | null): v
               ? WALLET_COPY.no_wallets_mobile
               : model.view === "no_wallets"
                 ? WALLET_COPY.no_wallets
-                : WALLET_COPY.idle;
+                : model.view === "discovering"
+                  ? WALLET_COPY.discovering
+                  : WALLET_COPY.idle;
 
   if (title) {
     title.textContent = copy.title;
@@ -122,7 +131,10 @@ function render(model: WalletConnectModel, connected: ConnectedWallet | null): v
 
   setHidden(
     connectBtn,
-    !showConnect || model.view === "no_wallets" || model.view === "no_wallets_mobile"
+    !showConnect ||
+      model.view === "no_wallets" ||
+      model.view === "no_wallets_mobile" ||
+      model.view === "discovering"
   );
   setHidden(verifyBtn, !showVerify);
   setHidden(picker, true);
@@ -170,7 +182,15 @@ export function initWalletConnectPage(): void {
   const search = typeof window !== "undefined" ? window.location.search : "";
   let model = initialWalletConnectModel(search);
   let connected: ConnectedWallet | null = null;
-  const registry = createWalletRegistry();
+  let discoveryPending = false;
+  let discoveryTimer = 0;
+  let syncDiscovery = (): void => {};
+
+  const registry = createWalletRegistry({
+    onChange() {
+      syncDiscovery();
+    },
+  });
 
   const api = getWalletApiBaseUrlFromEnv(import.meta.env, window.location.protocol);
   const botUsername =
@@ -195,19 +215,55 @@ export function initWalletConnectPage(): void {
   const tryAgainBtn = $("wc-try-again") as HTMLButtonElement | null;
   const picker = $("wc-picker");
 
-  function syncDiscovery(): void {
+  function logDiscoverySafe(): void {
+    if (!import.meta.env.DEV) {
+      return;
+    }
+    const summary = describeDiscoveredWallets(registry.list());
+    console.info("[ManGo wallet] discovery", summary);
+  }
+
+  function clearDiscoveryTimer(): void {
+    if (discoveryTimer) {
+      window.clearTimeout(discoveryTimer);
+      discoveryTimer = 0;
+    }
+  }
+
+  function startDiscoveryWindow(): void {
+    discoveryPending = true;
+    clearDiscoveryTimer();
+    discoveryTimer = window.setTimeout(() => {
+      discoveryPending = false;
+      discoveryTimer = 0;
+      syncDiscovery();
+    }, DISCOVERY_GRACE_MS);
+  }
+
+  syncDiscovery = (): void => {
+    const wallets = registry.list();
+    logDiscoverySafe();
     const nextView = resolveDiscoveryView({
       hasToken: Boolean(model.token),
       isMobile: currentIsMobile(),
-      walletCount: registry.list().length,
+      walletCount: wallets.length,
       currentView: model.view,
+      discoveryPending,
     });
     if (nextView === model.view) {
       return;
     }
     model = { ...model, view: nextView, errorMessage: null };
     render(model, connected);
+  };
+
+  function destroy(): void {
+    clearDiscoveryTimer();
+    registry.destroy();
+    window.removeEventListener("pagehide", destroy);
   }
+
+  window.addEventListener("pagehide", destroy);
 
   async function connectOne(wallet: DiscoveredWallet): Promise<void> {
     model = { ...model, view: "connecting", errorMessage: null };
@@ -273,11 +329,18 @@ export function initWalletConnectPage(): void {
       return;
     }
     const wallets = registry.list();
+    const isMobile = currentIsMobile();
+    if (isMobile && wallets.length === 0) {
+      startDiscoveryWindow();
+    } else {
+      discoveryPending = false;
+      clearDiscoveryTimer();
+    }
     model = {
       ...model,
       view: nextViewAfterRetryDiscovery({
         hasToken: true,
-        isMobile: currentIsMobile(),
+        isMobile,
         walletCount: wallets.length,
       }),
       errorMessage: null,
@@ -285,8 +348,10 @@ export function initWalletConnectPage(): void {
     render(model, connected);
   });
 
+  if (currentIsMobile() && model.token && model.view === "idle") {
+    startDiscoveryWindow();
+  }
   syncDiscovery();
-  window.setTimeout(syncDiscovery, 500);
 
   verifyBtn?.addEventListener("click", async () => {
     const token = model.token;

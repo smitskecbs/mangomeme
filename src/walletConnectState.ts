@@ -1,6 +1,7 @@
 export type WalletConnectView =
   | "missing_token"
   | "idle"
+  | "discovering"
   | "connecting"
   | "connected"
   | "verifying"
@@ -76,6 +77,10 @@ export const WALLET_COPY = {
     title: "🥭 Connect your Solana Wallet",
     body: "Verify a Solana wallet to link it to your ManGo Telegram profile.\n\nConnect a compatible Solana wallet and sign a verification message.\n\nNo transaction will be sent.\nManGo never gets control of your wallet.",
   },
+  discovering: {
+    title: "🥭 Connect your Solana Wallet",
+    body: "Looking for your wallet...",
+  },
   expired: {
     title: "Link expired",
     body: "This verification link has expired.\nReturn to Telegram and request a new one.",
@@ -102,6 +107,8 @@ export const WALLET_COPY = {
     "Wallet connected. Sign a message to verify ownership — no transaction will be sent.",
 } as const;
 
+export const DISCOVERY_GRACE_MS = 2000;
+
 const LOCKED_DISCOVERY_VIEWS: ReadonlySet<WalletConnectView> = new Set([
   "missing_token",
   "connecting",
@@ -118,6 +125,7 @@ export function resolveDiscoveryView(input: {
   isMobile: boolean;
   walletCount: number;
   currentView: WalletConnectView;
+  discoveryPending?: boolean;
 }): WalletConnectView {
   if (!input.hasToken) {
     return "missing_token";
@@ -129,6 +137,9 @@ export function resolveDiscoveryView(input: {
     return "idle";
   }
   if (input.isMobile) {
+    if (input.discoveryPending) {
+      return "discovering";
+    }
     return "no_wallets_mobile";
   }
   if (input.currentView === "no_wallets") {
@@ -148,7 +159,7 @@ export function nextViewAfterRetryDiscovery(input: {
   if (input.walletCount > 0) {
     return "idle";
   }
-  return input.isMobile ? "no_wallets_mobile" : "no_wallets";
+  return input.isMobile ? "discovering" : "no_wallets";
 }
 
 export function telegramReturnUrl(botUsername: string): string {

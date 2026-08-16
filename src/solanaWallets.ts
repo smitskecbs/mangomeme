@@ -1,10 +1,24 @@
 /**
- * Discover Solana wallets via Wallet Standard, with Phantom/Solflare legacy fallback.
+ * Discover Solana wallets via Wallet Standard, with official legacy fallbacks.
  * Connect + signMessage only. Never signTransaction / sendTransaction.
+ *
+ * Wallet Standard handshake (https://github.com/wallet-standard/wallet-standard):
+ * - App listens for `wallet-standard:register-wallet` and calls detail({ register }).
+ * - App dispatches `wallet-standard:app-ready` WITH { register } in event.detail
+ *   so wallets that injected first can register.
+ * - App may also drain deprecated navigator.wallets callbacks.
+ *
+ * Legacy injected providers (only if connect + signMessage exist):
+ * - Phantom: window.phantom.solana / window.solana.isPhantom
+ * - Solflare: window.solflare
+ * - Backpack: window.backpack (official adapter) or window.solana.isBackpack
+ *   https://www.npmjs.com/package/@solana/wallet-adapter-backpack
+ *   Backpack in-app docs also show window.solana.signMessage:
+ *   https://docs.backpack.app/deeplinks/limitations.md
  */
 
-const WALLET_STANDARD_REGISTER = "wallet-standard:register-wallet";
-const WALLET_STANDARD_READY = "wallet-standard:app-ready";
+export const WALLET_STANDARD_REGISTER = "wallet-standard:register-wallet";
+export const WALLET_STANDARD_READY = "wallet-standard:app-ready";
 const STANDARD_CONNECT = "standard:connect";
 const SOLANA_SIGN_MESSAGE = "solana:signMessage";
 
@@ -41,21 +55,37 @@ interface StandardWalletLike {
   chains?: string[];
 }
 
-interface LegacySolanaProvider {
+export interface LegacySolanaProvider {
   isPhantom?: boolean;
   isSolflare?: boolean;
+  isBackpack?: boolean;
   publicKey?: { toBytes(): Uint8Array; toBase58(): string };
-  connect(): Promise<{ publicKey?: { toBytes(): Uint8Array; toBase58(): string } }>;
+  connect(): Promise<{ publicKey?: { toBytes(): Uint8Array; toBase58(): string } } | void>;
   signMessage(
     message: Uint8Array,
-    encoding?: string
+    extra?: string | { toBytes(): Uint8Array; toBase58(): string }
   ): Promise<{ signature: Uint8Array } | Uint8Array>;
 }
 
-interface LegacyWindow {
+export interface WalletDiscoveryTarget {
+  addEventListener(type: string, listener: EventListener): void;
+  removeEventListener(type: string, listener: EventListener): void;
+  dispatchEvent(event: Event): boolean;
   solana?: LegacySolanaProvider;
   phantom?: { solana?: LegacySolanaProvider };
   solflare?: LegacySolanaProvider;
+  backpack?: LegacySolanaProvider;
+  navigator?: { wallets?: unknown };
+}
+
+export interface WalletRegistryOptions {
+  target?: WalletDiscoveryTarget;
+  onChange?: () => void;
+}
+
+export interface WalletRegistry {
+  list: () => DiscoveredWallet[];
+  destroy: () => void;
 }
 
 function hasSignMessage(wallet: StandardWalletLike): boolean {
@@ -72,10 +102,98 @@ function isSolanaWallet(wallet: StandardWalletLike): boolean {
   return hasSignMessage(wallet);
 }
 
-export function createWalletRegistry(): {
-  list: () => DiscoveredWallet[];
+export function isUsableLegacyProvider(provider: unknown): provider is LegacySolanaProvider {
+  if (!provider || typeof provider !== "object") {
+    return false;
+  }
+  const candidate = provider as LegacySolanaProvider;
+  return typeof candidate.connect === "function" && typeof candidate.signMessage === "function";
+}
+
+function summarizeDiscovery(wallets: DiscoveredWallet[]): {
+  count: number;
+  names: string[];
+  kinds: Array<DiscoveredWallet["kind"]>;
 } {
+  return {
+    count: wallets.length,
+    names: wallets.map((wallet) => wallet.name),
+    kinds: wallets.map((wallet) => wallet.kind),
+  };
+}
+
+function listLegacyProviders(target: WalletDiscoveryTarget): DiscoveredWallet[] {
+  const wallets: DiscoveredWallet[] = [];
+  const names = new Set<string>();
+
+  function addLegacy(id: string, name: string, provider: LegacySolanaProvider | undefined): void {
+    const key = name.toLowerCase();
+    if (!provider || names.has(key) || !isUsableLegacyProvider(provider)) {
+      return;
+    }
+    names.add(key);
+    wallets.push({
+      id,
+      name,
+      kind: "legacy",
+      legacyProvider: provider,
+    });
+  }
+
+  const backpack =
+    (isUsableLegacyProvider(target.backpack) ? target.backpack : undefined) ||
+    (target.solana?.isBackpack && isUsableLegacyProvider(target.solana)
+      ? target.solana
+      : undefined);
+  addLegacy("legacy:backpack", "Backpack", backpack);
+
+  const phantom =
+    (isUsableLegacyProvider(target.phantom?.solana) ? target.phantom?.solana : undefined) ||
+    (target.solana?.isPhantom && isUsableLegacyProvider(target.solana)
+      ? target.solana
+      : undefined);
+  addLegacy("legacy:phantom", "Phantom", phantom);
+
+  addLegacy(
+    "legacy:solflare",
+    "Solflare",
+    isUsableLegacyProvider(target.solflare) ? target.solflare : undefined
+  );
+
+  return wallets;
+}
+
+function drainDeprecatedNavigatorWallets(
+  target: WalletDiscoveryTarget,
+  register: (wallet: StandardWalletLike) => void
+): void {
+  const pending = target.navigator?.wallets;
+  if (!Array.isArray(pending)) {
+    return;
+  }
+  for (const callback of pending) {
+    if (typeof callback === "function") {
+      try {
+        callback({ register });
+      } catch {
+        // ignore a single bad deprecated callback
+      }
+    }
+  }
+}
+
+export function createWalletRegistry(options: WalletRegistryOptions = {}): WalletRegistry {
   const standard = new Map<string, StandardWalletLike>();
+  const target =
+    options.target ||
+    (typeof window !== "undefined" ? (window as unknown as WalletDiscoveryTarget) : undefined);
+  let notify = false;
+
+  function emitChange(): void {
+    if (notify && options.onChange) {
+      options.onChange();
+    }
+  }
 
   function register(wallet: StandardWalletLike): void {
     if (!wallet || typeof wallet.name !== "string") {
@@ -84,24 +202,37 @@ export function createWalletRegistry(): {
     if (!isSolanaWallet(wallet) || !hasSignMessage(wallet)) {
       return;
     }
+    const previous = standard.get(wallet.name);
     standard.set(wallet.name, wallet);
+    if (previous !== wallet) {
+      emitChange();
+    }
   }
 
-  if (typeof window !== "undefined") {
-    window.addEventListener(WALLET_STANDARD_REGISTER, ((event: Event) => {
-      const detail = (event as CustomEvent<(api: { register: typeof register }) => void>)
-        .detail;
-      if (typeof detail === "function") {
-        detail({ register });
-      }
-    }) as EventListener);
+  const onRegisterWallet = ((event: Event) => {
+    const detail = (event as CustomEvent<(api: { register: typeof register }) => void>).detail;
+    if (typeof detail === "function") {
+      detail({ register });
+    }
+  }) as EventListener;
 
+  if (target) {
+    target.addEventListener(WALLET_STANDARD_REGISTER, onRegisterWallet);
+    drainDeprecatedNavigatorWallets(target, register);
     try {
-      window.dispatchEvent(new Event(WALLET_STANDARD_READY));
+      target.dispatchEvent(
+        new CustomEvent(WALLET_STANDARD_READY, {
+          detail: { register },
+          bubbles: false,
+          cancelable: false,
+        })
+      );
     } catch {
       // ignore
     }
   }
+
+  notify = true;
 
   return {
     list() {
@@ -119,32 +250,33 @@ export function createWalletRegistry(): {
         });
       }
 
-      if (typeof window !== "undefined") {
-        const w = window as unknown as LegacyWindow;
-        const phantom = w.phantom?.solana || (w.solana?.isPhantom ? w.solana : undefined);
-        const solflare = w.solflare;
-
-        if (phantom && !names.has("phantom")) {
-          wallets.push({
-            id: "legacy:phantom",
-            name: "Phantom",
-            kind: "legacy",
-            legacyProvider: phantom,
-          });
-        }
-        if (solflare && !names.has("solflare")) {
-          wallets.push({
-            id: "legacy:solflare",
-            name: "Solflare",
-            kind: "legacy",
-            legacyProvider: solflare,
-          });
+      if (target) {
+        for (const legacy of listLegacyProviders(target)) {
+          if (names.has(legacy.name.toLowerCase())) {
+            continue;
+          }
+          names.add(legacy.name.toLowerCase());
+          wallets.push(legacy);
         }
       }
 
       return wallets;
     },
+    destroy() {
+      notify = false;
+      if (target) {
+        target.removeEventListener(WALLET_STANDARD_REGISTER, onRegisterWallet);
+      }
+    },
   };
+}
+
+export function describeDiscoveredWallets(wallets: DiscoveredWallet[]): {
+  count: number;
+  names: string[];
+  kinds: Array<DiscoveredWallet["kind"]>;
+} {
+  return summarizeDiscovery(wallets);
 }
 
 function bytesToAddress(bytes: Uint8Array): string {
@@ -212,7 +344,8 @@ export async function connectDiscoveredWallet(
     throw new Error("Wallet is unavailable.");
   }
   const connected = await wallet.legacyProvider.connect();
-  const key = connected.publicKey || wallet.legacyProvider.publicKey;
+  const key =
+    (connected && connected.publicKey) || wallet.legacyProvider.publicKey;
   if (!key) {
     throw new Error("Wallet did not return a public key.");
   }
@@ -256,7 +389,12 @@ export async function signMessageWithWallet(
   if (!wallet.legacyProvider) {
     throw new Error("Wallet is unavailable.");
   }
-  const signed = await wallet.legacyProvider.signMessage(bytes, "utf8");
+  const extra =
+    (wallet.id === "legacy:backpack" || wallet.legacyProvider.isBackpack) &&
+    wallet.legacyProvider.publicKey
+      ? wallet.legacyProvider.publicKey
+      : "utf8";
+  const signed = await wallet.legacyProvider.signMessage(bytes, extra);
   const signature =
     signed instanceof Uint8Array
       ? signed
