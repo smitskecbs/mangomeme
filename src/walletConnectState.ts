@@ -8,7 +8,8 @@ export type WalletConnectView =
   | "expired"
   | "used"
   | "error"
-  | "no_wallets";
+  | "no_wallets"
+  | "no_wallets_mobile";
 
 export interface WalletConnectModel {
   token: string | null;
@@ -91,11 +92,64 @@ export const WALLET_COPY = {
     title: "🥭 Connect your Solana Wallet",
     body: "No compatible Solana wallet was detected.\n\nInstall or open a Solana wallet in your browser and try again.",
   },
+  no_wallets_mobile: {
+    title: "🥭 No wallet detected",
+    body: "Your wallet may not be available inside Telegram or your mobile browser.\n\nOpen this page in your Solana wallet app to continue.",
+  },
   connect_failed:
     "Could not connect wallet. Choose a compatible Solana wallet installed in your browser.",
   connected_status:
     "Wallet connected. Sign a message to verify ownership — no transaction will be sent.",
 } as const;
+
+const LOCKED_DISCOVERY_VIEWS: ReadonlySet<WalletConnectView> = new Set([
+  "missing_token",
+  "connecting",
+  "connected",
+  "verifying",
+  "success",
+  "expired",
+  "used",
+  "error",
+]);
+
+export function resolveDiscoveryView(input: {
+  hasToken: boolean;
+  isMobile: boolean;
+  walletCount: number;
+  currentView: WalletConnectView;
+}): WalletConnectView {
+  if (!input.hasToken) {
+    return "missing_token";
+  }
+  if (LOCKED_DISCOVERY_VIEWS.has(input.currentView)) {
+    return input.currentView;
+  }
+  if (input.walletCount > 0) {
+    return "idle";
+  }
+  if (input.isMobile) {
+    return "no_wallets_mobile";
+  }
+  if (input.currentView === "no_wallets") {
+    return "no_wallets";
+  }
+  return "idle";
+}
+
+export function nextViewAfterRetryDiscovery(input: {
+  hasToken: boolean;
+  isMobile: boolean;
+  walletCount: number;
+}): WalletConnectView {
+  if (!input.hasToken) {
+    return "missing_token";
+  }
+  if (input.walletCount > 0) {
+    return "idle";
+  }
+  return input.isMobile ? "no_wallets_mobile" : "no_wallets";
+}
 
 export function telegramReturnUrl(botUsername: string): string {
   const name = botUsername.replace(/^@/, "").trim();

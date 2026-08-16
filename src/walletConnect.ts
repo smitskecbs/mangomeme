@@ -1,3 +1,7 @@
+import {
+  isLikelyMobileBrowser,
+  listOfficialMobileOpenActions,
+} from "./mobileWalletLinks.ts";
 import { shortenWallet } from "./shortenWallet.ts";
 import {
   bytesToBase64,
@@ -9,6 +13,8 @@ import {
   WALLET_COPY,
   initialWalletConnectModel,
   mapApiErrorToView,
+  nextViewAfterRetryDiscovery,
+  resolveDiscoveryView,
   telegramReturnUrl,
   type WalletConnectModel,
 } from "./walletConnectState.ts";
@@ -33,6 +39,36 @@ function setHidden(el: HTMLElement | null, hidden: boolean): void {
   el.hidden = hidden;
 }
 
+function currentIsMobile(): boolean {
+  if (typeof navigator === "undefined") {
+    return false;
+  }
+  return isLikelyMobileBrowser(navigator.userAgent, {
+    maxTouchPoints: navigator.maxTouchPoints,
+    platform: navigator.platform,
+  });
+}
+
+function renderMobileOpen(model: WalletConnectModel): void {
+  const panel = $("wc-mobile-open");
+  const links = $("wc-mobile-links");
+  const show = model.view === "no_wallets_mobile" && Boolean(model.token);
+  if (links) {
+    links.replaceChildren();
+    if (show && model.token) {
+      for (const action of listOfficialMobileOpenActions(model.token)) {
+        const link = document.createElement("a");
+        link.className = "btn btn-copy wc-mobile-open-btn";
+        link.textContent = action.label;
+        link.setAttribute("href", action.href);
+        link.rel = "noopener noreferrer";
+        links.appendChild(link);
+      }
+    }
+  }
+  setHidden(panel, !show);
+}
+
 function render(model: WalletConnectModel, connected: ConnectedWallet | null): void {
   const title = $("wc-title");
   const body = $("wc-body");
@@ -53,9 +89,11 @@ function render(model: WalletConnectModel, connected: ConnectedWallet | null): v
           ? WALLET_COPY.success
           : model.view === "missing_token"
             ? WALLET_COPY.missing_token
-            : model.view === "no_wallets"
-              ? WALLET_COPY.no_wallets
-              : WALLET_COPY.idle;
+            : model.view === "no_wallets_mobile"
+              ? WALLET_COPY.no_wallets_mobile
+              : model.view === "no_wallets"
+                ? WALLET_COPY.no_wallets
+                : WALLET_COPY.idle;
 
   if (title) {
     title.textContent = copy.title;
@@ -82,10 +120,14 @@ function render(model: WalletConnectModel, connected: ConnectedWallet | null): v
   const showVerify = model.view === "connected" || model.view === "verifying";
   const showReturn = model.view === "success" || model.view === "expired" || model.view === "used";
 
-  setHidden(connectBtn, !showConnect || model.view === "no_wallets");
+  setHidden(
+    connectBtn,
+    !showConnect || model.view === "no_wallets" || model.view === "no_wallets_mobile"
+  );
   setHidden(verifyBtn, !showVerify);
   setHidden(picker, true);
   setHidden(returnLink, !showReturn);
+  renderMobileOpen(model);
 
   if (connectBtn) {
     connectBtn.disabled = model.view === "connecting";
@@ -150,7 +192,22 @@ export function initWalletConnectPage(): void {
 
   const connectBtn = $("wc-connect") as HTMLButtonElement | null;
   const verifyBtn = $("wc-verify") as HTMLButtonElement | null;
+  const tryAgainBtn = $("wc-try-again") as HTMLButtonElement | null;
   const picker = $("wc-picker");
+
+  function syncDiscovery(): void {
+    const nextView = resolveDiscoveryView({
+      hasToken: Boolean(model.token),
+      isMobile: currentIsMobile(),
+      walletCount: registry.list().length,
+      currentView: model.view,
+    });
+    if (nextView === model.view) {
+      return;
+    }
+    model = { ...model, view: nextView, errorMessage: null };
+    render(model, connected);
+  }
 
   async function connectOne(wallet: DiscoveredWallet): Promise<void> {
     model = { ...model, view: "connecting", errorMessage: null };
@@ -181,7 +238,10 @@ export function initWalletConnectPage(): void {
     }
     const wallets = registry.list();
     if (wallets.length === 0) {
-      model = { ...model, view: "no_wallets" };
+      model = {
+        ...model,
+        view: currentIsMobile() ? "no_wallets_mobile" : "no_wallets",
+      };
       render(model, connected);
       return;
     }
@@ -207,6 +267,26 @@ export function initWalletConnectPage(): void {
     }
     picker.hidden = false;
   });
+
+  tryAgainBtn?.addEventListener("click", () => {
+    if (!model.token) {
+      return;
+    }
+    const wallets = registry.list();
+    model = {
+      ...model,
+      view: nextViewAfterRetryDiscovery({
+        hasToken: true,
+        isMobile: currentIsMobile(),
+        walletCount: wallets.length,
+      }),
+      errorMessage: null,
+    };
+    render(model, connected);
+  });
+
+  syncDiscovery();
+  window.setTimeout(syncDiscovery, 500);
 
   verifyBtn?.addEventListener("click", async () => {
     const token = model.token;
