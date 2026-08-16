@@ -84,6 +84,39 @@ export interface VerifyResponse {
   error?: string;
 }
 
+export function interpretWalletVerifyResponse(
+  status: number,
+  data: {
+    ok?: unknown;
+    error?: unknown;
+    challengeId?: unknown;
+    message?: unknown;
+  } | null
+): VerifyResponse {
+  if (!Number.isFinite(status) || status < 200 || status > 299) {
+    const error =
+      data && typeof data.error === "string" && data.error.trim()
+        ? data.error
+        : status === 0
+          ? NETWORK_CORS_ERROR
+          : "Verification failed.";
+    return { ok: false, error };
+  }
+  if (!data || data.ok !== true) {
+    return {
+      ok: false,
+      error:
+        data && typeof data.error === "string" && data.error.trim()
+          ? data.error
+          : "Verification failed.",
+    };
+  }
+  if (data.challengeId || data.message) {
+    return { ok: false, error: "Verification failed." };
+  }
+  return { ok: true };
+}
+
 async function postJson<T extends { ok?: boolean; error?: string }>(
   url: string,
   body: unknown
@@ -123,7 +156,7 @@ export async function requestWalletChallenge(
   if (result.networkError) {
     return { ok: false, error: result.networkError };
   }
-  if (!result.data || result.data.ok !== true) {
+  if (result.status < 200 || result.status > 299 || !result.data || result.data.ok !== true) {
     return {
       ok: false,
       error:
@@ -150,13 +183,7 @@ export async function requestWalletVerify(
   if (result.networkError) {
     return { ok: false, error: result.networkError };
   }
-  if (!result.data || result.data.ok !== true) {
-    return {
-      ok: false,
-      error: (result.data && result.data.error) || "Verification failed.",
-    };
-  }
-  return { ok: true };
+  return interpretWalletVerifyResponse(result.status, result.data);
 }
 
 export function bytesToBase64(bytes: Uint8Array): string {

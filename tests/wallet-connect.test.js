@@ -22,7 +22,9 @@ import {
 import { shortenWallet } from "../src/shortenWallet.ts";
 import {
   EXPECTED_WALLET_API_ORIGIN,
+  NETWORK_CORS_ERROR,
   getWalletApiBaseUrlFromEnv,
+  interpretWalletVerifyResponse,
   resolveWalletApiBaseUrl,
 } from "../src/walletConnectApi.ts";
 import {
@@ -752,6 +754,37 @@ runTest("incomplete injected provider is not faked as a wallet", () => {
   const registry = createWalletRegistry({ target });
   assert.equal(registry.list().length, 0);
   registry.destroy();
+});
+
+runTest("frontend verify success requires HTTP 2xx and ok true only", () => {
+  assert.deepEqual(interpretWalletVerifyResponse(200, { ok: true }), { ok: true });
+  assert.equal(interpretWalletVerifyResponse(200, { ok: false, error: "nope" }).ok, false);
+  assert.equal(interpretWalletVerifyResponse(400, { ok: false, error: "bad" }).ok, false);
+  assert.equal(interpretWalletVerifyResponse(500, { ok: true }).ok, false);
+  assert.equal(interpretWalletVerifyResponse(0, { ok: false }).ok, false);
+  assert.equal(interpretWalletVerifyResponse(0, { ok: false }).error, NETWORK_CORS_ERROR);
+  assert.equal(
+    interpretWalletVerifyResponse(200, {
+      ok: true,
+      challengeId: "not-a-verify",
+      message: "ManGo Wallet Verification",
+    }).ok,
+    false
+  );
+});
+
+runTest("wallet-connect page does not force success after signing", () => {
+  const connectSrc = readSrc("src/walletConnect.ts");
+  const verifyStart = connectSrc.indexOf('verifyBtn?.addEventListener("click"');
+  const verifyBlock = connectSrc.slice(verifyStart);
+  assert.ok(verifyBlock.includes("requestWalletVerify"));
+  assert.ok(verifyBlock.includes("if (!verified.ok)"));
+  const failReturn = verifyBlock.indexOf("if (!verified.ok)");
+  const successAssign = verifyBlock.indexOf('view: "success"');
+  assert.ok(failReturn >= 0 && successAssign > failReturn);
+  assert.ok(verifyBlock.includes("signMessageWithWallet"));
+  const signCatch = verifyBlock.indexOf("Signature cancelled");
+  assert.ok(signCatch >= 0 && signCatch < successAssign);
 });
 
 await Promise.all(pending);
