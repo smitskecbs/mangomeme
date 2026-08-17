@@ -1,0 +1,78 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="robots" content="noindex,nofollow" />
+    <meta
+      name="description"
+      content="ManGo admin delivery. Sign a prepared MANGO reward from the distribution wallet."
+    />
+    <title>ManGo · Admin Delivery</title>
+    <link rel="icon" type="image/png" href="/src/assets/logo.png" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Fredoka:wght@500;600;700&family=Nunito:wght@400;600;700&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="/styles.css" />
+  </head>
+  <body class="wc-page">
+    <div class="sky-birds" id="sky-birds" aria-hidden="true"></div>
+    <div class="sky-clouds" id="sky-clouds" aria-hidden="true"></div>
+    <div class="hero-sun-glow" aria-hidden="true"></div>
+
+    <main class="wc-main">
+      <section class="page-hero page-hero--wallet" id="top">
+        <div class="container page-hero-inner">
+          <p class="page-hero__eyebrow">ManGo · Admin Delivery</p>
+        </div>
+      </section>
+
+      <section class="wc-panel">
+        <div class="container">
+          <div class="glass-card glass-card--featured wc-card">
+            <span class="glass-card__reflection" aria-hidden="true"></span>
+            <img
+              class="wc-logo"
+              src="/src/assets/logo.png"
+              alt=""
+              width="88"
+              height="88"
+            />
+            <h1 class="wc-title" id="ad-title">🎁 ManGo Delivery</h1>
+            <p class="wc-body" id="ad-body">
+              Open this page from ManGo Bot to continue.
+            </p>
+            <p class="wc-address" id="ad-address" hidden></p>
+            <p class="wc-error" id="ad-error" hidden></p>
+            <pre class="wc-review" id="ad-review" hidden></pre>
+            <div class="wc-actions">
+              <button class="btn btn-copy" id="ad-connect" type="button" hidden>
+                Connect Wallet
+              </button>
+              <button class="btn btn-copy" id="ad-confirm" type="button" hidden>
+                Confirm in Wallet
+              </button>
+            </div>
+            <p class="wc-note" id="ad-note">
+              You send MANGO from the connected distribution wallet. ManGo never
+              holds private keys. The backend verifies the transaction before
+              marking a reward sent.
+            </p>
+          </div>
+        </div>
+      </section>
+    </main>
+
+    <footer class="footer">
+      <div class="container">
+        <p>ManGo · $MNGO · Solana</p>
+      </div>
+    </footer>
+
+    <script type="module" src="/script.js"></script>
+    <script type="module" src="/src/adminDelivery.ts"></script>
+  </body>
+</html>
