@@ -23,6 +23,7 @@ export default defineConfig(({ mode }) => {
           main: resolve(__dirname, "index.html"),
           mangoLabs: resolve(__dirname, "mango-labs.html"),
           walletConnect: resolve(__dirname, "wallet-connect.html"),
+          presale: resolve(__dirname, "presale.html"),
         },
       },
     },
