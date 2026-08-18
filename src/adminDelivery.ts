@@ -17,7 +17,9 @@ import {
   type DeliveryModel,
   type DeliveryView,
 } from "./adminDeliveryState.ts";
-import { signAndSendDeliveryTransfer } from "./solanaDeliveryWallet.ts";
+import { signAndSendDeliveryTransfer } from "./solanaDeliveryWallet.js";
+import { submitAdminDelivery } from "./adminDeliverySubmit.js";
+import { logDeliveryError } from "./adminDeliveryDebug.js";
 
 function $(id: string): HTMLElement | null {
   return document.getElementById(id);
@@ -176,7 +178,8 @@ async function connectWallet(): Promise<void> {
       view:
         connected.address === model.status.expectedSigner ? "review" : "wallet_mismatch",
     });
-  } catch {
+  } catch (err) {
+    logDeliveryError(err, "wallet-connect");
     render({ ...model, view: "error", errorMessage: "Wallet connection failed." });
   }
 }
@@ -195,43 +198,28 @@ async function confirmDelivery(): Promise<void> {
     return;
   }
   render({ ...model, view: "submitting" });
-  const payment = await requestDeliveryPayment(api.baseUrl, model.token);
-  if (!payment.ok || !payment.recentBlockhash || !payment.from || !payment.to || !payment.mint) {
+  const result = await submitAdminDelivery({
+    baseUrl: api.baseUrl,
+    token: model.token,
+    wallet: connected,
+    requestPayment: requestDeliveryPayment,
+    requestConfirm: requestDeliveryConfirm,
+    signAndSend: signAndSendDeliveryTransfer,
+    onSigned: () => {
+      render({ ...model, view: "verifying" });
+    },
+  });
+  if (!result.ok) {
     render({
       ...model,
-      view: "error",
-      errorMessage: payment.error || "Invalid request.",
-    });
-    return;
-  }
-  let signature: string;
-  try {
-    signature = await signAndSendDeliveryTransfer(connected, {
-      from: payment.from,
-      to: payment.to,
-      mint: payment.mint,
-      amountBaseUnits: String(payment.amountBaseUnits),
-      decimals: Number(payment.decimals) || 9,
-      memo: String(payment.memo),
-      recentBlockhash: payment.recentBlockhash,
-    });
-  } catch {
-    render({ ...model, view: "transaction_failed" });
-    return;
-  }
-  render({ ...model, view: "verifying" });
-  const confirmed = await requestDeliveryConfirm(api.baseUrl, model.token, signature);
-  if (!confirmed.ok) {
-    render({
-      ...model,
-      view: "error",
-      errorMessage: confirmed.error || "This transaction could not be verified.",
+      view: result.view === "transaction_failed" ? "transaction_failed" : "error",
+      errorMessage: result.errorMessage || null,
     });
     return;
   }
   render({
     ...model,
-    view: confirmed.idempotent ? "already_sent" : "success",
+    view: result.idempotent ? "already_sent" : "success",
   });
 }
 

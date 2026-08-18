@@ -7,88 +7,411 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { PublicKey } from "@solana/web3.js";
+import {
+  isUnsafeDeliveryLogText,
+  logDeliveryDebug,
+  logDeliveryError,
+} from "../src/adminDeliveryDebug.js";
+import {
+  SPL_ASSOCIATED_TOKEN_PROGRAM_ID,
+  SPL_MEMO_PROGRAM_ID,
+  SPL_TOKEN_PROGRAM_ID,
+  buildDeliveryTransferTransaction,
+  describeDeliveryTransfer,
+  describeWalletSendApi,
+  getAssociatedTokenAddress,
+  inspectDeliveryTransaction,
+} from "../src/solanaDeliveryTx.js";
+import { signAndSendDeliveryTransfer } from "../src/solanaDeliveryWallet.js";
+import { submitAdminDelivery } from "../src/adminDeliverySubmit.js";
 
 const root = path.join(path.dirname(fileURLToPath(import.meta.url)), "..");
+const FROM = "memekrM9YqzBQBmHjgne8CHeaPicxwFDxeMo3bkHwMY";
+const MINT = "29KN57rM6tV2aWdo1agZcF6ynPXB1dhHdKHNrrAmaNGo";
+const TO = "So11111111111111111111111111111111111111112";
+const BLOCKHASH = "11111111111111111111111111111111";
+const AMOUNT = "1000000000000";
+const MEMO = "mango-delivery:abcd1234";
 
 function readSrc(rel) {
   return readFileSync(path.join(root, rel), "utf8");
 }
 
 function runTest(name, fn) {
-  fn();
-  console.log(`✓ ${name}`);
+  tests.push({ name, fn });
+}
+
+const tests = [];
+
+function details(overrides = {}) {
+  return {
+    from: FROM,
+    to: TO,
+    mint: MINT,
+    amountBaseUnits: AMOUNT,
+    decimals: 9,
+    memo: MEMO,
+    recentBlockhash: BLOCKHASH,
+    ...overrides,
+  };
+}
+
+function captureLogs(fn) {
+  const info = [];
+  const errors = [];
+  const origInfo = console.info;
+  const origError = console.error;
+  console.info = (...args) => {
+    info.push(args.map(String).join(" "));
+  };
+  console.error = (...args) => {
+    errors.push(args.map(String).join(" "));
+  };
+  return Promise.resolve()
+    .then(fn)
+    .finally(() => {
+      console.info = origInfo;
+      console.error = origError;
+    })
+    .then((result) => ({ result, logs: [...info, ...errors].join("\n") }));
+}
+
+function assertLogsSafe(logs) {
+  const text = String(logs || "");
+  assert.equal(/helius/i.test(text), false);
+  assert.equal(/api[-_]?key/i.test(text), false);
+  assert.equal(text.includes("https://"), false);
+  assert.equal(text.includes("DELIVERY_RPC_URL"), false);
+  assert.equal(text.includes("admin-delivery/"), false);
 }
 
 runTest("admin delivery page exists and is not in site nav", () => {
-  const html = readSrc("admin-delivery.html");
-  assert.ok(html.includes("ManGo · Admin Delivery"));
-  assert.ok(html.includes("src/adminDelivery.ts"));
-  assert.ok(html.includes("Confirm in Wallet"));
-  assert.ok(html.includes("noindex"));
-  assert.ok(!html.includes('href="/mango-labs"'));
-  const index = readSrc("index.html");
-  assert.ok(!index.includes("admin-delivery"));
-});
+    const html = readSrc("admin-delivery.html");
+    assert.ok(html.includes("ManGo · Admin Delivery"));
+    assert.ok(html.includes("src/adminDelivery.ts"));
+    assert.ok(html.includes("Confirm in Wallet"));
+    assert.ok(html.includes("noindex"));
+    assert.ok(!html.includes('href="/mango-labs"'));
+    const index = readSrc("index.html");
+    assert.ok(!index.includes("admin-delivery"));
+  });
 
 runTest("vercel rewrite /admin-delivery/:token", () => {
-  const vercel = JSON.parse(readSrc("vercel.json"));
-  assert.ok(
-    vercel.rewrites.some(
-      (rule) =>
-        rule.source === "/admin-delivery/:token" &&
-        rule.destination === "/admin-delivery.html"
-    )
-  );
-});
+    const vercel = JSON.parse(readSrc("vercel.json"));
+    assert.ok(
+      vercel.rewrites.some(
+        (rule) =>
+          rule.source === "/admin-delivery/:token" &&
+          rule.destination === "/admin-delivery.html"
+      )
+    );
+  });
 
 runTest("vite includes admin delivery entry", () => {
-  const vite = readSrc("vite.config.ts");
-  assert.ok(vite.includes("admin-delivery.html"));
-});
+    const vite = readSrc("vite.config.ts");
+    assert.ok(vite.includes("admin-delivery.html"));
+  });
 
 runTest("token parser is path-based without uid", () => {
-  const src = readSrc("src/adminDeliveryState.ts");
-  assert.ok(src.includes("DELIVERY_TOKEN_PATTERN"));
-  assert.ok(src.includes("admin-delivery"));
-  assert.ok(!src.includes("telegramUserId"));
-  assert.ok(!src.includes("uid="));
-});
+    const src = readSrc("src/adminDeliveryState.ts");
+    assert.ok(src.includes("DELIVERY_TOKEN_PATTERN"));
+    assert.ok(src.includes("admin-delivery"));
+    assert.ok(!src.includes("telegramUserId"));
+    assert.ok(!src.includes("uid="));
+  });
 
 runTest("review copy shows admin amount and destination", () => {
-  const src = readSrc("src/adminDeliveryState.ts");
-  assert.ok(src.includes("Type:"));
-  assert.ok(src.includes("distribution wallet"));
-  assert.ok(src.includes("amountDisplay"));
-});
+    const src = readSrc("src/adminDeliveryState.ts");
+    assert.ok(src.includes("Type:"));
+    assert.ok(src.includes("distribution wallet"));
+    assert.ok(src.includes("amountDisplay"));
+  });
 
 runTest("client never chooses mint or destination as source of truth", () => {
-  const api = readSrc("src/adminDeliveryApi.ts");
-  assert.ok(api.includes("/delivery/status"));
-  assert.ok(api.includes("/delivery/confirm"));
-  assert.ok(api.includes("Never sends telegramUserId"));
-  assert.ok(!api.includes("telegramUserId:"));
-  const page = readSrc("src/adminDelivery.ts");
-  assert.ok(page.includes("signAndSendDeliveryTransfer"));
-  assert.ok(page.includes("payment.mint"));
-  assert.ok(page.includes("payment.to"));
-  const wallet = readSrc("src/solanaDeliveryWallet.ts");
-  assert.ok(wallet.includes("ManGo never signs"));
-  assert.ok(!wallet.toLowerCase().includes("secretkey"));
-  assert.ok(!wallet.toLowerCase().includes("privatekey"));
-});
+    const api = readSrc("src/adminDeliveryApi.ts");
+    assert.ok(api.includes("/delivery/status"));
+    assert.ok(api.includes("/delivery/confirm"));
+    assert.ok(api.includes("Never sends telegramUserId"));
+    assert.ok(!api.includes("telegramUserId:"));
+    const page = readSrc("src/adminDelivery.ts");
+    assert.ok(page.includes("signAndSendDeliveryTransfer"));
+    assert.ok(page.includes("submitAdminDelivery"));
+    const wallet = readSrc("src/solanaDeliveryWallet.js");
+    assert.ok(wallet.includes("ManGo never signs"));
+    assert.ok(!wallet.toLowerCase().includes("secretkey"));
+    assert.ok(!wallet.toLowerCase().includes("privatekey"));
+  });
 
 runTest("no private keys in delivery frontend", () => {
-  for (const rel of [
-    "src/adminDelivery.ts",
-    "src/adminDeliveryApi.ts",
-    "src/adminDeliveryState.ts",
-    "src/solanaDeliveryWallet.ts",
-    "admin-delivery.html",
-  ]) {
-    const src = readSrc(rel).toLowerCase();
-    assert.ok(!src.includes("privatekey"));
-    assert.ok(!src.includes("seed phrase"));
-  }
-});
+    for (const rel of [
+      "src/adminDelivery.ts",
+      "src/adminDeliveryApi.ts",
+      "src/adminDeliveryState.ts",
+      "src/solanaDeliveryWallet.js",
+      "src/solanaDeliveryTx.js",
+      "src/adminDeliverySubmit.js",
+      "src/adminDeliveryDebug.js",
+      "admin-delivery.html",
+    ]) {
+      const src = readSrc(rel).toLowerCase();
+      assert.ok(!src.includes("privatekey"));
+      assert.ok(!src.includes("seed phrase"));
+    }
+  });
 
-console.log("admin-delivery tests passed");
+runTest("empty catch no longer swallows transaction errors", () => {
+    const page = readSrc("src/adminDelivery.ts");
+    assert.ok(page.includes("logDeliveryError"));
+    assert.equal(/catch\s*\{/.test(page), false);
+    const submit = readSrc("src/adminDeliverySubmit.js");
+    assert.ok(submit.includes("catch (err)"));
+    assert.ok(submit.includes("logDeliveryError"));
+    assert.ok(submit.includes("requestConfirm"));
+  });
+
+runTest("no client-side getLatestBlockhash or global Buffer instruction data", () => {
+    for (const rel of [
+      "src/solanaDeliveryWallet.js",
+      "src/solanaDeliveryTx.js",
+      "src/adminDelivery.ts",
+      "src/adminDeliverySubmit.js",
+    ]) {
+      const src = readSrc(rel);
+      assert.equal(src.includes("getLatestBlockhash"), false, rel);
+      assert.equal(src.includes("Buffer.from"), false, rel);
+      assert.equal(src.includes("Buffer.alloc"), false, rel);
+    }
+  });
+
+runTest("source ATA is derived for distribution owner and Tokenkeg mint", () => {
+    const from = new PublicKey(FROM);
+    const mint = new PublicKey(MINT);
+    const expected = getAssociatedTokenAddress(mint, from);
+    const [independent] = PublicKey.findProgramAddressSync(
+      [from.toBuffer(), new PublicKey(SPL_TOKEN_PROGRAM_ID).toBuffer(), mint.toBuffer()],
+      new PublicKey(SPL_ASSOCIATED_TOKEN_PROGRAM_ID)
+    );
+    assert.equal(expected.toBase58(), independent.toBase58());
+    const plan = describeDeliveryTransfer(details());
+    assert.equal(plan.sourceOwner, FROM);
+    assert.equal(plan.sourceAta, expected.toBase58());
+    assert.equal(plan.sourceAtaLookup, "derived");
+    assert.equal(plan.tokenProgram, SPL_TOKEN_PROGRAM_ID);
+  });
+
+runTest("destination ATA is derived for frozen walletSnapshot owner", () => {
+    const to = new PublicKey(TO);
+    const mint = new PublicKey(MINT);
+    const expected = getAssociatedTokenAddress(mint, to);
+    const plan = describeDeliveryTransfer(details());
+    assert.equal(plan.destOwner, TO);
+    assert.equal(plan.destAta, expected.toBase58());
+    assert.equal(plan.destAtaCreate, "idempotent-always");
+  });
+
+runTest("transaction uses server blockhash, decimals 9, exact amount, fee payer", () => {
+    const tx = buildDeliveryTransferTransaction(details(), BLOCKHASH);
+    const inspected = inspectDeliveryTransaction(tx);
+    assert.equal(inspected.instructionCount, 3);
+    assert.equal(inspected.feePayer, FROM);
+    assert.equal(tx.recentBlockhash, BLOCKHASH);
+    assert.equal(inspected.transferChecked, true);
+    assert.equal(inspected.transferDecimals, 9);
+    assert.equal(inspected.transferAmount, AMOUNT);
+    assert.equal(inspected.destAtaCreateIdempotent, true);
+    assert.deepEqual(inspected.programs, [
+      SPL_ASSOCIATED_TOKEN_PROGRAM_ID,
+      SPL_TOKEN_PROGRAM_ID,
+      SPL_MEMO_PROGRAM_ID,
+    ]);
+    const memo = new TextDecoder().decode(Uint8Array.from(tx.instructions[2].data));
+    assert.equal(memo, MEMO);
+  });
+
+runTest("destination ATA missing still includes idempotent create", () => {
+    const existing = inspectDeliveryTransaction(buildDeliveryTransferTransaction(details(), BLOCKHASH));
+    const missing = inspectDeliveryTransaction(buildDeliveryTransferTransaction(details({ to: FROM }), BLOCKHASH));
+    assert.equal(existing.instructionCount, 3);
+    assert.equal(missing.instructionCount, 3);
+    assert.equal(existing.destAtaCreateIdempotent, true);
+    assert.equal(missing.destAtaCreateIdempotent, true);
+  });
+
+runTest("invalid construction throws", () => {
+    assert.throws(() => buildDeliveryTransferTransaction(details({ mint: "not-a-mint" }), BLOCKHASH));
+    assert.throws(() => buildDeliveryTransferTransaction(details({ decimals: 6 }), BLOCKHASH), /decimals/);
+  });
+
+runTest("wallet without signAndSendTransaction fails loudly", async () => {
+    const wallet = {
+      address: FROM,
+      kind: "standard",
+      account: { address: FROM, publicKey: new Uint8Array(32) },
+      standardWallet: {
+        features: {
+          "solana:signMessage": { signMessage: async () => [] },
+        },
+      },
+    };
+    const api = describeWalletSendApi(wallet);
+    assert.equal(api.hasStandardSignAndSend, false);
+    const captured = await captureLogs(async () => {
+      await assert.rejects(() => signAndSendDeliveryTransfer(wallet, details()), /cannot send a token transfer/);
+    });
+    assert.ok(captured.logs.includes("missing-sign-and-send") || captured.logs.includes("cannot send"));
+    assert.ok(captured.logs.includes("[delivery] failed"));
+    assertLogsSafe(captured.logs);
+  });
+
+runTest("wallet rejection is logged and not swallowed", async () => {
+    const wallet = {
+      address: FROM,
+      kind: "standard",
+      account: { address: FROM, publicKey: new Uint8Array(32) },
+      standardWallet: {
+        features: {
+          "solana:signAndSendTransaction": {
+            signAndSendTransaction: async () => {
+              const err = new Error("User rejected the request.");
+              err.code = 4001;
+              throw err;
+            },
+          },
+        },
+      },
+    };
+    const captured = await captureLogs(async () => {
+      await assert.rejects(() => signAndSendDeliveryTransfer(wallet, details()), /User rejected/);
+    });
+    assert.ok(captured.logs.includes("name=Error"));
+    assert.ok(captured.logs.includes("code=4001"));
+    assert.ok(captured.logs.includes("User rejected the request."));
+    assertLogsSafe(captured.logs);
+  });
+
+runTest("successful signature leads to /delivery/confirm", async () => {
+    const calls = [];
+    const result = await submitAdminDelivery({
+      baseUrl: "https://example.invalid",
+      token: "should-not-appear-in-logs-token-value-xxxxxxxx",
+      wallet: { address: FROM, kind: "legacy" },
+      requestPayment: async () => ({
+        ok: true,
+        from: FROM,
+        to: TO,
+        mint: MINT,
+        amountBaseUnits: AMOUNT,
+        decimals: 9,
+        memo: MEMO,
+        recentBlockhash: BLOCKHASH,
+      }),
+      signAndSend: async () => "5".repeat(88),
+      requestConfirm: async (_base, _token, signature) => {
+        calls.push(signature);
+        return { ok: true, idempotent: false };
+      },
+    });
+    assert.equal(result.ok, true);
+    assert.equal(result.confirmCalled, true);
+    assert.equal(calls.length, 1);
+    assert.equal(calls[0].length, 88);
+  });
+
+runTest("transaction construction exception does not call confirm", async () => {
+    const confirms = [];
+    const captured = await captureLogs(async () => {
+      const result = await submitAdminDelivery({
+        baseUrl: "https://example.invalid",
+        token: "tok",
+        wallet: { address: FROM, kind: "legacy" },
+        requestPayment: async () => ({
+          ok: true,
+          from: FROM,
+          to: TO,
+          mint: MINT,
+          amountBaseUnits: AMOUNT,
+          decimals: 9,
+          memo: MEMO,
+          recentBlockhash: BLOCKHASH,
+        }),
+        signAndSend: async () => {
+          throw new TypeError("Buffer is not defined");
+        },
+        requestConfirm: async () => {
+          confirms.push(true);
+          return { ok: true };
+        },
+      });
+      assert.equal(result.ok, false);
+      assert.equal(result.view, "transaction_failed");
+      assert.equal(result.confirmCalled, false);
+    });
+    assert.equal(confirms.length, 0);
+    assert.ok(captured.logs.includes("Buffer is not defined"));
+    assert.ok(captured.logs.includes("[delivery] failed step=sign-send"));
+    assertLogsSafe(captured.logs);
+  });
+
+runTest("debug logs never include secrets or raw RPC URLs", async () => {
+    const captured = await captureLogs(async () => {
+      logDeliveryDebug("payment-response", {
+        ok: true,
+        token: "secret-token",
+        rpcUrl: "https://rpc.test.invalid/rpc?api-key=abc",
+        blockhashPresent: true,
+      });
+      logDeliveryError(
+        Object.assign(new Error("RPC https://rpc.test.invalid/rpc?api-key=abc"), { name: "TypeError" }),
+        "sign-send"
+      );
+    });
+    assert.ok(captured.logs.includes("blockhashPresent=true"));
+    assert.equal(captured.logs.includes("secret-token"), false);
+    assert.ok(captured.logs.includes("name=TypeError"));
+    assert.equal(captured.logs.includes("RPC https"), false);
+    assertLogsSafe(captured.logs);
+  });
+
+runTest("standard signAndSendTransaction is used when available", async () => {
+    let called = false;
+    const wallet = {
+      address: FROM,
+      kind: "standard",
+      account: { address: FROM, publicKey: new Uint8Array(32) },
+      standardWallet: {
+        features: {
+          "solana:signAndSendTransaction": {
+            signAndSendTransaction: async (input) => {
+              called = true;
+              assert.ok(input.transaction instanceof Uint8Array);
+              assert.equal(input.chain, "solana:mainnet");
+              assert.ok(input.transaction.byteLength > 0);
+              return [{ signature: new Uint8Array(64).fill(1) }];
+            },
+          },
+        },
+      },
+    };
+    const captured = await captureLogs(async () => signAndSendDeliveryTransfer(wallet, details()));
+    assert.equal(called, true);
+    assert.equal(typeof captured.result, "string");
+    assert.ok(captured.result.length > 0);
+    assert.ok(captured.logs.includes("wallet-sign-send-started"));
+    assert.ok(captured.logs.includes("wallet-sign-send-succeeded"));
+    assert.equal(captured.logs.includes(captured.result), false);
+    assertLogsSafe(captured.logs);
+  });
+
+async function main() {
+  for (const { name, fn } of tests) {
+    await fn();
+    console.log(`✓ ${name}`);
+  }
+  console.log("admin-delivery tests passed");
+}
+
+main().catch((err) => {
+  console.error(err);
+  process.exitCode = 1;
+});
