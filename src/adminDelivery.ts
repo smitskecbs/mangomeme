@@ -12,8 +12,11 @@ import {
 } from "./adminDeliveryApi.ts";
 import {
   DELIVERY_COPY,
+  WAITING_COPY,
   initialDeliveryModel,
   reviewText,
+  deliverySignatureStorageKey,
+  isWaitingDeliveryState,
   type DeliveryModel,
   type DeliveryView,
 } from "./adminDeliveryState.ts";
@@ -66,6 +69,9 @@ function copyFor(view: DeliveryView): { title: string; body: string } {
       title: "🎁 Verifying on-chain",
       body: "Checking the Solana transaction. Status updates only after verification.",
     };
+  }
+  if (view === "waiting") {
+    return WAITING_COPY;
   }
   return DELIVERY_COPY[view];
 }
@@ -121,7 +127,92 @@ function render(next: DeliveryModel): void {
   }
   if (confirmBtn) {
     setHidden(confirmBtn, model.view !== "review");
+    confirmBtn.disabled = model.view !== "review";
   }
+}
+
+function readStoredSignature(token: string): string | null {
+  try {
+    const value = sessionStorage.getItem(deliverySignatureStorageKey(token));
+    return typeof value === "string" && value ? value : null;
+  } catch (_err) {
+    return null;
+  }
+}
+
+function writeStoredSignature(token: string, signature: string): void {
+  try {
+    sessionStorage.setItem(deliverySignatureStorageKey(token), signature);
+  } catch (_err) {
+    // ignore quota / private mode
+  }
+}
+
+function viewForLoadedStatus(
+  status: NonNullable<DeliveryModel["status"]>,
+  walletAddress: string | null
+): DeliveryView {
+  if (status.deliveryState === "sent") {
+    return "success";
+  }
+  if (status.deliveryState === "failed") {
+    return "error";
+  }
+  const stored = model.token ? readStoredSignature(model.token) : null;
+  if (isWaitingDeliveryState(status.deliveryState) || status.hasSignature || stored) {
+    return "waiting";
+  }
+  if (!walletAddress) {
+    return "wallet_not_connected";
+  }
+  if (walletAddress !== status.expectedSigner) {
+    return "wallet_mismatch";
+  }
+  return "review";
+}
+
+async function resumeConfirmation(signature: string): Promise<void> {
+  const api = getDeliveryApiBaseUrl(import.meta.env, window.location.protocol);
+  if (!api.baseUrl || !model.token) {
+    return;
+  }
+  render({ ...model, view: "waiting" });
+  const result = await submitAdminDelivery({
+    baseUrl: api.baseUrl,
+    token: model.token,
+    wallet: connected,
+    existingSignature: signature,
+    requestPayment: requestDeliveryPayment,
+    requestConfirm: requestDeliveryConfirm,
+    signAndSend: signAndSendDeliveryTransfer,
+  });
+  applySubmitResult(result);
+}
+
+function applySubmitResult(result: {
+  ok: boolean;
+  view?: string;
+  errorMessage?: string | null;
+  pending?: boolean;
+  idempotent?: boolean;
+  signature?: string;
+}): void {
+  if (result.ok) {
+    render({
+      ...model,
+      view: result.idempotent ? "already_sent" : "success",
+    });
+    return;
+  }
+  if (result.view === "waiting" || result.pending) {
+    render({ ...model, view: "waiting", errorMessage: null });
+    return;
+  }
+  render({
+    ...model,
+    view: result.view === "transaction_failed" ? "transaction_failed" : "error",
+    errorMessage: result.errorMessage || null,
+  });
 }
 
 async function loadStatus(): Promise<void> {
@@ -137,6 +228,12 @@ async function loadStatus(): Promise<void> {
   const status = await requestDeliveryStatus(api.baseUrl, model.token);
   if (!status.ok || !status.expectedSigner || !status.destination || !status.amountBaseUnits) {
     const reason = (status as { reason?: string }).reason;
+    const stored = readStoredSignature(model.token);
+    if (stored && reason === "expired") {
+      render({ ...model, view: "waiting" });
+      await resumeConfirmation(stored);
+      return;
+    }
     if (reason === "expired") {
       render({ ...model, view: "expired_session" });
       return;
@@ -148,15 +245,19 @@ async function loadStatus(): Promise<void> {
     });
     return;
   }
+  const loaded = status as DeliveryModel["status"];
+  const nextView = viewForLoadedStatus(loaded as NonNullable<DeliveryModel["status"]>, connected && connected.address);
   render({
     ...model,
-    status: status as DeliveryModel["status"],
-    view: connected
-      ? connected.address === status.expectedSigner
-        ? "review"
-        : "wallet_mismatch"
-      : "wallet_not_connected",
+    status: loaded,
+    view: nextView,
   });
+  if (nextView === "waiting") {
+    const stored = readStoredSignature(model.token);
+    if (stored) {
+      await resumeConfirmation(stored);
+    }
+  }
 }
 
 async function connectWallet(): Promise<void> {
@@ -175,8 +276,7 @@ async function connectWallet(): Promise<void> {
     render({
       ...model,
       connectedWallet: connected.address,
-      view:
-        connected.address === model.status.expectedSigner ? "review" : "wallet_mismatch",
+      view: viewForLoadedStatus(model.status, connected.address),
     });
   } catch (err) {
     logDeliveryError(err, "wallet-connect");
@@ -188,8 +288,16 @@ async function confirmDelivery(): Promise<void> {
   if (!model.token || !model.status || !connected) {
     return;
   }
+  if (model.view !== "review") {
+    return;
+  }
   if (connected.address !== model.status.expectedSigner) {
     render({ ...model, view: "wallet_mismatch" });
+    return;
+  }
+  const stored = readStoredSignature(model.token);
+  if (stored) {
+    await resumeConfirmation(stored);
     return;
   }
   const api = getDeliveryApiBaseUrl(import.meta.env, window.location.protocol);
@@ -205,22 +313,12 @@ async function confirmDelivery(): Promise<void> {
     requestPayment: requestDeliveryPayment,
     requestConfirm: requestDeliveryConfirm,
     signAndSend: signAndSendDeliveryTransfer,
-    onSigned: () => {
-      render({ ...model, view: "verifying" });
+    onSigned: (signature: string) => {
+      writeStoredSignature(model.token as string, signature);
+      render({ ...model, view: "waiting" });
     },
   });
-  if (!result.ok) {
-    render({
-      ...model,
-      view: result.view === "transaction_failed" ? "transaction_failed" : "error",
-      errorMessage: result.errorMessage || null,
-    });
-    return;
-  }
-  render({
-    ...model,
-    view: result.idempotent ? "already_sent" : "success",
-  });
+  applySubmitResult(result);
 }
 
 function bind(): void {

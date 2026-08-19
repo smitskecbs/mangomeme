@@ -15,6 +15,7 @@ export type DeliveryView =
   | "review"
   | "submitting"
   | "verifying"
+  | "waiting"
   | "success"
   | "already_sent"
   | "transaction_failed"
@@ -45,6 +46,8 @@ export interface DeliveryStatusPayload {
   recentBlockhash?: string | null;
   lastValidBlockHeight?: number | null;
   network: string;
+  deliveryState?: "open" | "payment-ready" | "submitted" | "reconciling" | "sent" | "failed";
+  hasSignature?: boolean;
 }
 
 export interface DeliveryModel {
@@ -56,7 +59,7 @@ export interface DeliveryModel {
 }
 
 export const DELIVERY_COPY: Record<
-  Exclude<DeliveryView, "error" | "review" | "submitting" | "verifying">,
+  Exclude<DeliveryView, "error" | "review" | "submitting" | "verifying" | "waiting">,
   { title: string; body: string }
 > = {
   missing_token: {
@@ -99,6 +102,11 @@ export const DELIVERY_COPY: Record<
     title: "🎁 Transaction failed",
     body: "The wallet transaction did not complete. Nothing was marked sent.",
   },
+};
+
+export const WAITING_COPY = {
+  title: "🎁 Transaction submitted",
+  body: "Waiting for network confirmation...",
 };
 
 export function isDeliveryToken(value: string | null | undefined): value is string {
@@ -154,4 +162,52 @@ export function reviewText(status: DeliveryStatusPayload): string {
     "",
     "You are sending this reward from your connected distribution wallet.",
   ].join("\n");
+}
+
+export const DELIVERY_SIGNATURE_STORAGE_PREFIX = "mango.delivery.sig.";
+
+export function deliverySignatureStorageKey(token: string): string {
+  return `${DELIVERY_SIGNATURE_STORAGE_PREFIX}${token}`;
+}
+
+export function isConfirmPending(confirmed: {
+  ok?: boolean;
+  pending?: boolean;
+  status?: string;
+  reason?: string;
+} | null | undefined): boolean {
+  if (!confirmed) {
+    return false;
+  }
+  if (confirmed.pending === true) {
+    return true;
+  }
+  const status = confirmed.status;
+  return (
+    status === "pending" ||
+    status === "reconciling" ||
+    status === "submitted" ||
+    status === "not-finalized"
+  );
+}
+
+export function isConfirmSent(confirmed: {
+  ok?: boolean;
+  pending?: boolean;
+  status?: string;
+} | null | undefined): boolean {
+  if (!confirmed || confirmed.ok !== true) {
+    return false;
+  }
+  if (isConfirmPending(confirmed)) {
+    return false;
+  }
+  if (confirmed.status === "failed") {
+    return false;
+  }
+  return confirmed.status === "sent" || confirmed.status === undefined || confirmed.status === "ok";
+}
+
+export function isWaitingDeliveryState(state: string | null | undefined): boolean {
+  return state === "submitted" || state === "reconciling";
 }

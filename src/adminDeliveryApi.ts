@@ -94,12 +94,27 @@ export async function requestDeliveryConfirm(
   baseUrl: string,
   token: string,
   signature: string
-): Promise<{ ok: boolean; error?: string; signature?: string; idempotent?: boolean }> {
+): Promise<{
+  ok: boolean;
+  error?: string;
+  signature?: string;
+  idempotent?: boolean;
+  pending?: boolean;
+  status?: string;
+  reason?: string;
+  deliveryState?: string;
+  kind?: string;
+}> {
   const result = await postJson<{
     ok: boolean;
     error?: string;
     signature?: string;
     idempotent?: boolean;
+    pending?: boolean;
+    status?: string;
+    reason?: string;
+    deliveryState?: string;
+    kind?: string;
   }>(`${baseUrl}/delivery/confirm`, { token, signature });
   return interpret(result.status, result.data, result.networkError);
 }

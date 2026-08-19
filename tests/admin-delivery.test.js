@@ -290,6 +290,115 @@ runTest("wallet rejection is logged and not swallowed", async () => {
     assertLogsSafe(captured.logs);
   });
 
+runTest("confirm pending then sent polls the same signature without resend", async () => {
+    let signCalls = 0;
+    const confirms = [];
+    const result = await submitAdminDelivery({
+      baseUrl: "https://example.invalid",
+      token: "tok",
+      wallet: { address: FROM, kind: "legacy" },
+      confirmAttempts: 4,
+      confirmRetryMs: 1,
+      sleep: async () => {},
+      requestPayment: async () => ({
+        ok: true,
+        from: FROM,
+        to: TO,
+        mint: MINT,
+        amountBaseUnits: AMOUNT,
+        decimals: 9,
+        memo: MEMO,
+        recentBlockhash: BLOCKHASH,
+      }),
+      signAndSend: async () => {
+        signCalls += 1;
+        return "5".repeat(88);
+      },
+      requestConfirm: async (_base, _token, signature) => {
+        confirms.push(signature);
+        if (confirms.length < 3) {
+          return { ok: true, pending: true, status: "pending", reason: "not-finalized" };
+        }
+        return { ok: true, status: "sent", signature };
+      },
+    });
+    assert.equal(result.ok, true);
+    assert.equal(signCalls, 1);
+    assert.equal(confirms.length, 3);
+    assert.ok(confirms.every((sig) => sig === "5".repeat(88)));
+    assert.equal(result.view, undefined);
+  });
+
+runTest("waiting state resumes confirm without signing again", async () => {
+    let signCalls = 0;
+    let paymentCalls = 0;
+    const result = await submitAdminDelivery({
+      baseUrl: "https://example.invalid",
+      token: "tok",
+      wallet: { address: FROM, kind: "legacy" },
+      existingSignature: "6".repeat(88),
+      confirmAttempts: 2,
+      confirmRetryMs: 1,
+      sleep: async () => {},
+      requestPayment: async () => {
+        paymentCalls += 1;
+        return { ok: false };
+      },
+      signAndSend: async () => {
+        signCalls += 1;
+        return "5".repeat(88);
+      },
+      requestConfirm: async (_base, _token, signature) => {
+        assert.equal(signature, "6".repeat(88));
+        return { ok: true, status: "sent", signature };
+      },
+    });
+    assert.equal(result.ok, true);
+    assert.equal(signCalls, 0);
+    assert.equal(paymentCalls, 0);
+  });
+
+runTest("true verification mismatch is a failure not waiting", async () => {
+    const result = await submitAdminDelivery({
+      baseUrl: "https://example.invalid",
+      token: "tok",
+      wallet: { address: FROM, kind: "legacy" },
+      requestPayment: async () => ({
+        ok: true,
+        from: FROM,
+        to: TO,
+        mint: MINT,
+        amountBaseUnits: AMOUNT,
+        decimals: 9,
+        memo: MEMO,
+        recentBlockhash: BLOCKHASH,
+      }),
+      signAndSend: async () => "5".repeat(88),
+      requestConfirm: async () => ({
+        ok: false,
+        status: "failed",
+        reason: "wrong-amount",
+        error: "This transaction could not be verified.",
+      }),
+    });
+    assert.equal(result.ok, false);
+    assert.equal(result.view, "error");
+    assert.equal(result.pending, undefined);
+  });
+
+runTest("waiting copy and no resend after signature are in the page", () => {
+    const state = readSrc("src/adminDeliveryState.ts");
+    assert.ok(state.includes("Transaction submitted"));
+    assert.ok(state.includes("Waiting for network confirmation"));
+    const page = readSrc("src/adminDelivery.ts");
+    assert.ok(page.includes("existingSignature"));
+    assert.ok(page.includes('view: "waiting"'));
+    assert.ok(page.includes("model.view !== \"review\""));
+    const submit = readSrc("src/adminDeliverySubmit.js");
+    assert.ok(submit.includes("existingSignature"));
+    assert.ok(submit.includes("confirm-pending"));
+  });
+
 runTest("successful signature leads to /delivery/confirm", async () => {
     const calls = [];
     const result = await submitAdminDelivery({
