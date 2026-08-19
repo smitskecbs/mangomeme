@@ -38,6 +38,10 @@ export interface DeliveryStatusPayload {
   tokenProgram: string;
   associatedTokenProgram: string;
   decimals: number;
+  assetType?: string;
+  assetTypeLabel?: string;
+  mintShort?: string;
+  deliveryType?: string;
   from: string;
   to: string;
   fromShort: string;
@@ -154,14 +158,21 @@ export function initialDeliveryModel(search: string, pathname?: string): Deliver
 }
 
 export function reviewText(status: DeliveryStatusPayload): string {
+  const asset = status.asset || "MANGO";
+  const typeLine = status.assetTypeLabel || asset;
+  const mintLine = status.mintShort || status.mint;
   return [
-    `Type: ${status.typeLabel}`,
+    `Type: ${typeLine}`,
+    `Asset: ${asset}`,
+    mintLine ? `Mint: ${mintLine}` : null,
+    `Amount: ${status.amountDisplay} ${asset}`,
     `To: ${status.destinationShort}`,
-    `Asset: ${status.asset}`,
-    `Amount: ${status.amountDisplay} MANGO`,
+    status.expectedSignerShort ? `From: ${status.expectedSignerShort}` : null,
     "",
     "You are sending this reward from your connected distribution wallet.",
-  ].join("\n");
+  ]
+    .filter((line) => line !== null)
+    .join("\n");
 }
 
 export const DELIVERY_SIGNATURE_STORAGE_PREFIX = "mango.delivery.sig.";

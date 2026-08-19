@@ -17,6 +17,7 @@ import {
   SPL_ASSOCIATED_TOKEN_PROGRAM_ID,
   SPL_MEMO_PROGRAM_ID,
   SPL_TOKEN_PROGRAM_ID,
+  SPL_TOKEN_2022_PROGRAM_ID,
   buildDeliveryTransferTransaction,
   describeDeliveryTransfer,
   describeWalletSendApi,
@@ -240,7 +241,34 @@ runTest("destination ATA missing still includes idempotent create", () => {
 
 runTest("invalid construction throws", () => {
     assert.throws(() => buildDeliveryTransferTransaction(details({ mint: "not-a-mint" }), BLOCKHASH));
-    assert.throws(() => buildDeliveryTransferTransaction(details({ decimals: 6 }), BLOCKHASH), /decimals/);
+    assert.throws(
+      () => buildDeliveryTransferTransaction(details({ decimals: 99 }), BLOCKHASH),
+      /decimals/
+    );
+    assert.throws(
+      () =>
+        buildDeliveryTransferTransaction(
+          details({ tokenProgram: SPL_TOKEN_2022_PROGRAM_ID }),
+          BLOCKHASH
+        ),
+      /Unsupported token type/
+    );
+  });
+
+runTest("decimals 6 SPL and 0 NFT are allowed; MANGO 9 still works", () => {
+    const spl = inspectDeliveryTransaction(
+      buildDeliveryTransferTransaction(details({ decimals: 6, amountBaseUnits: "1000000" }), BLOCKHASH)
+    );
+    assert.equal(spl.transferDecimals, 6);
+    assert.equal(spl.transferChecked, true);
+    const nft = inspectDeliveryTransaction(
+      buildDeliveryTransferTransaction(details({ decimals: 0, amountBaseUnits: "1" }), BLOCKHASH)
+    );
+    assert.equal(nft.transferDecimals, 0);
+    assert.equal(nft.transferAmount, "1");
+    const mango = inspectDeliveryTransaction(buildDeliveryTransferTransaction(details(), BLOCKHASH));
+    assert.equal(mango.transferDecimals, 9);
+    assert.equal(mango.transferAmount, AMOUNT);
   });
 
 runTest("wallet without signAndSendTransaction fails loudly", async () => {

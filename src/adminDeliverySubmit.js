@@ -4,6 +4,7 @@
  */
 
 import { logDeliveryDebug, logDeliveryError } from "./adminDeliveryDebug.js";
+import { parseDeliveryDecimals } from "./solanaDeliveryTx.js";
 
 export const DEFAULT_CONFIRM_ATTEMPTS = 8;
 export const DEFAULT_CONFIRM_RETRY_MS = 2000;
@@ -147,7 +148,7 @@ export async function submitAdminDelivery(input) {
     ok: true,
     blockhashPresent: true,
     blockhashLength: String(payment.recentBlockhash).length,
-    decimals: Number(payment.decimals) || 9,
+    decimals: parseDeliveryDecimals(payment.decimals),
     amountBaseUnits: String(payment.amountBaseUnits),
     memoPrefixOk: String(payment.memo || "").startsWith("mango-delivery:"),
   });
@@ -159,7 +160,8 @@ export async function submitAdminDelivery(input) {
       to: payment.to,
       mint: payment.mint,
       amountBaseUnits: String(payment.amountBaseUnits),
-      decimals: Number(payment.decimals) || 9,
+      decimals: parseDeliveryDecimals(payment.decimals),
+      tokenProgram: payment.tokenProgram,
       memo: String(payment.memo),
       recentBlockhash: payment.recentBlockhash,
     });

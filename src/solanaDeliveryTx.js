@@ -13,10 +13,33 @@ import {
 export const SPL_TOKEN_PROGRAM_ID = "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA";
 export const SPL_ASSOCIATED_TOKEN_PROGRAM_ID = "ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL";
 export const SPL_MEMO_PROGRAM_ID = "MemoSq4gqABAXKb96qnH8TysNcWxMyWCqXgDLGmfcHr";
+export const SPL_TOKEN_2022_PROGRAM_ID = "TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb";
 
 const TOKEN_PROGRAM_ID = new PublicKey(SPL_TOKEN_PROGRAM_ID);
 const ASSOCIATED_TOKEN_PROGRAM_ID = new PublicKey(SPL_ASSOCIATED_TOKEN_PROGRAM_ID);
 const MEMO_PROGRAM_ID = new PublicKey(SPL_MEMO_PROGRAM_ID);
+
+export function resolveDeliveryTokenProgram(tokenProgram) {
+  const id = typeof tokenProgram === "string" && tokenProgram ? tokenProgram : SPL_TOKEN_PROGRAM_ID;
+  if (id === SPL_TOKEN_2022_PROGRAM_ID) {
+    throw new Error("Unsupported token type for automatic delivery.");
+  }
+  if (id !== SPL_TOKEN_PROGRAM_ID) {
+    throw new Error("Unsupported token type for automatic delivery.");
+  }
+  return TOKEN_PROGRAM_ID;
+}
+
+export function parseDeliveryDecimals(value) {
+  if (value === undefined || value === null || value === "") {
+    return 9;
+  }
+  const decimals = typeof value === "number" ? value : Number(value);
+  if (!Number.isInteger(decimals) || decimals < 0 || decimals > 18) {
+    throw new Error("Delivery decimals are invalid.");
+  }
+  return decimals;
+}
 
 export function getAssociatedTokenAddress(mint, owner) {
   const [address] = PublicKey.findProgramAddressSync(
@@ -83,7 +106,7 @@ export function describeDeliveryTransfer(details) {
     destAtaLookup: "derived",
     destAtaCreate: "idempotent-always",
     amountBaseUnits: String(details.amountBaseUnits),
-    decimals: Number(details.decimals),
+    decimals: parseDeliveryDecimals(details.decimals),
     memoPrefixOk: String(details.memo || "").startsWith("mango-delivery:"),
     blockhashPresent: Boolean(details.recentBlockhash),
     blockhashLength: details.recentBlockhash ? String(details.recentBlockhash).length : 0,
@@ -116,10 +139,8 @@ export function buildDeliveryTransferTransaction(details, recentBlockhash) {
   if (amount <= 0n) {
     throw new Error("Delivery amount is invalid.");
   }
-  const decimals = Number(details.decimals);
-  if (!Number.isInteger(decimals) || decimals !== 9) {
-    throw new Error("Delivery decimals are invalid.");
-  }
+  resolveDeliveryTokenProgram(details.tokenProgram);
+  const decimals = parseDeliveryDecimals(details.decimals);
   const sourceAta = getAssociatedTokenAddress(mint, from);
   const destAta = getAssociatedTokenAddress(mint, to);
   const tx = new Transaction({

@@ -62,7 +62,7 @@ function copyFor(view: DeliveryView): { title: string; body: string } {
     };
   }
   if (view === "submitting") {
-    return { title: "🎁 Confirm in wallet", body: "Approve the MANGO transfer in your wallet." };
+    return { title: "🎁 Confirm in wallet", body: "Approve the transfer in your wallet." };
   }
   if (view === "verifying") {
     return {
