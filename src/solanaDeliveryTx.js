@@ -16,13 +16,14 @@ export const SPL_MEMO_PROGRAM_ID = "MemoSq4gqABAXKb96qnH8TysNcWxMyWCqXgDLGmfcHr"
 export const SPL_TOKEN_2022_PROGRAM_ID = "TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb";
 
 const TOKEN_PROGRAM_ID = new PublicKey(SPL_TOKEN_PROGRAM_ID);
+const TOKEN_2022_PROGRAM_ID = new PublicKey(SPL_TOKEN_2022_PROGRAM_ID);
 const ASSOCIATED_TOKEN_PROGRAM_ID = new PublicKey(SPL_ASSOCIATED_TOKEN_PROGRAM_ID);
 const MEMO_PROGRAM_ID = new PublicKey(SPL_MEMO_PROGRAM_ID);
 
 export function resolveDeliveryTokenProgram(tokenProgram) {
   const id = typeof tokenProgram === "string" && tokenProgram ? tokenProgram : SPL_TOKEN_PROGRAM_ID;
   if (id === SPL_TOKEN_2022_PROGRAM_ID) {
-    throw new Error("Unsupported token type for automatic delivery.");
+    return TOKEN_2022_PROGRAM_ID;
   }
   if (id !== SPL_TOKEN_PROGRAM_ID) {
     throw new Error("Unsupported token type for automatic delivery.");
@@ -41,15 +42,16 @@ export function parseDeliveryDecimals(value) {
   return decimals;
 }
 
-export function getAssociatedTokenAddress(mint, owner) {
+export function getAssociatedTokenAddress(mint, owner, tokenProgram) {
+  const program = resolveDeliveryTokenProgram(tokenProgram);
   const [address] = PublicKey.findProgramAddressSync(
-    [owner.toBuffer(), TOKEN_PROGRAM_ID.toBuffer(), mint.toBuffer()],
+    [owner.toBuffer(), program.toBuffer(), mint.toBuffer()],
     ASSOCIATED_TOKEN_PROGRAM_ID
   );
   return address;
 }
 
-function createIdempotentAtaInstruction(payer, owner, mint, ata) {
+function createIdempotentAtaInstruction(payer, owner, mint, ata, tokenProgram) {
   return new TransactionInstruction({
     programId: ASSOCIATED_TOKEN_PROGRAM_ID,
     keys: [
@@ -58,19 +60,19 @@ function createIdempotentAtaInstruction(payer, owner, mint, ata) {
       { pubkey: owner, isSigner: false, isWritable: false },
       { pubkey: mint, isSigner: false, isWritable: false },
       { pubkey: SystemProgram.programId, isSigner: false, isWritable: false },
-      { pubkey: TOKEN_PROGRAM_ID, isSigner: false, isWritable: false },
+      { pubkey: tokenProgram, isSigner: false, isWritable: false },
     ],
     data: new Uint8Array([1]),
   });
 }
 
-function transferCheckedInstruction(source, mint, destination, owner, amount, decimals) {
+function transferCheckedInstruction(source, mint, destination, owner, amount, decimals, tokenProgram) {
   const data = new Uint8Array(10);
   data[0] = 12;
   new DataView(data.buffer).setBigUint64(1, amount, true);
   data[9] = decimals;
   return new TransactionInstruction({
-    programId: TOKEN_PROGRAM_ID,
+    programId: tokenProgram,
     keys: [
       { pubkey: source, isSigner: false, isWritable: true },
       { pubkey: mint, isSigner: false, isWritable: false },
@@ -93,8 +95,9 @@ export function describeDeliveryTransfer(details) {
   const from = new PublicKey(details.from);
   const to = new PublicKey(details.to);
   const mint = new PublicKey(details.mint);
-  const sourceAta = getAssociatedTokenAddress(mint, from);
-  const destAta = getAssociatedTokenAddress(mint, to);
+  const tokenProgram = resolveDeliveryTokenProgram(details.tokenProgram);
+  const sourceAta = getAssociatedTokenAddress(mint, from, details.tokenProgram);
+  const destAta = getAssociatedTokenAddress(mint, to, details.tokenProgram);
   return {
     feePayer: from.toBase58(),
     sourceOwner: from.toBase58(),
@@ -111,7 +114,7 @@ export function describeDeliveryTransfer(details) {
     blockhashPresent: Boolean(details.recentBlockhash),
     blockhashLength: details.recentBlockhash ? String(details.recentBlockhash).length : 0,
     instructionCount: 3,
-    tokenProgram: SPL_TOKEN_PROGRAM_ID,
+    tokenProgram: tokenProgram.toBase58(),
   };
 }
 
@@ -139,17 +142,17 @@ export function buildDeliveryTransferTransaction(details, recentBlockhash) {
   if (amount <= 0n) {
     throw new Error("Delivery amount is invalid.");
   }
-  resolveDeliveryTokenProgram(details.tokenProgram);
+  const tokenProgram = resolveDeliveryTokenProgram(details.tokenProgram);
   const decimals = parseDeliveryDecimals(details.decimals);
-  const sourceAta = getAssociatedTokenAddress(mint, from);
-  const destAta = getAssociatedTokenAddress(mint, to);
+  const sourceAta = getAssociatedTokenAddress(mint, from, details.tokenProgram);
+  const destAta = getAssociatedTokenAddress(mint, to, details.tokenProgram);
   const tx = new Transaction({
     feePayer: from,
     recentBlockhash,
   });
   tx.add(
-    createIdempotentAtaInstruction(from, to, mint, destAta),
-    transferCheckedInstruction(sourceAta, mint, destAta, from, amount, decimals),
+    createIdempotentAtaInstruction(from, to, mint, destAta, tokenProgram),
+    transferCheckedInstruction(sourceAta, mint, destAta, from, amount, decimals, tokenProgram),
     memoInstruction(details.memo)
   );
   return tx;

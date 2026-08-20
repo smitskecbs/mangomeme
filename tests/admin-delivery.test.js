@@ -248,7 +248,7 @@ runTest("invalid construction throws", () => {
     assert.throws(
       () =>
         buildDeliveryTransferTransaction(
-          details({ tokenProgram: SPL_TOKEN_2022_PROGRAM_ID }),
+          details({ tokenProgram: "11111111111111111111111111111111" }),
           BLOCKHASH
         ),
       /Unsupported token type/
@@ -271,7 +271,45 @@ runTest("decimals 6 SPL and 0 NFT are allowed; MANGO 9 still works", () => {
     assert.equal(mango.transferAmount, AMOUNT);
   });
 
-runTest("wallet without signAndSendTransaction fails loudly", async () => {
+  runTest("Token-2022 transferChecked and ATA use Token-2022 program", () => {
+    const mint = new PublicKey(MINT);
+    const from = new PublicKey(FROM);
+    const to = new PublicKey(TO);
+    const program = new PublicKey(SPL_TOKEN_2022_PROGRAM_ID);
+    const expectedSource = PublicKey.findProgramAddressSync(
+      [from.toBuffer(), program.toBuffer(), mint.toBuffer()],
+      new PublicKey(SPL_ASSOCIATED_TOKEN_PROGRAM_ID)
+    )[0];
+    const expectedDest = PublicKey.findProgramAddressSync(
+      [to.toBuffer(), program.toBuffer(), mint.toBuffer()],
+      new PublicKey(SPL_ASSOCIATED_TOKEN_PROGRAM_ID)
+    )[0];
+    const plan = describeDeliveryTransfer(details({ tokenProgram: SPL_TOKEN_2022_PROGRAM_ID, decimals: 6, amountBaseUnits: "1000000" }));
+    assert.equal(plan.tokenProgram, SPL_TOKEN_2022_PROGRAM_ID);
+    assert.equal(plan.sourceAta, expectedSource.toBase58());
+    assert.equal(plan.destAta, expectedDest.toBase58());
+    const kegPlan = describeDeliveryTransfer(details());
+    assert.equal(kegPlan.tokenProgram, SPL_TOKEN_PROGRAM_ID);
+    assert.notEqual(plan.sourceAta, kegPlan.sourceAta);
+    const tx = buildDeliveryTransferTransaction(
+      details({ tokenProgram: SPL_TOKEN_2022_PROGRAM_ID, decimals: 6, amountBaseUnits: "1000000" }),
+      BLOCKHASH
+    );
+    const inspected = inspectDeliveryTransaction(tx);
+    assert.equal(inspected.transferChecked, true);
+    assert.equal(inspected.transferDecimals, 6);
+    assert.equal(inspected.transferAmount, "1000000");
+    assert.deepEqual(inspected.programs, [
+      SPL_ASSOCIATED_TOKEN_PROGRAM_ID,
+      SPL_TOKEN_2022_PROGRAM_ID,
+      SPL_MEMO_PROGRAM_ID,
+    ]);
+    assert.equal(tx.instructions[0].keys[5].pubkey.toBase58(), SPL_TOKEN_2022_PROGRAM_ID);
+    const memo = new TextDecoder().decode(Uint8Array.from(tx.instructions[2].data));
+    assert.equal(memo, MEMO);
+  });
+
+  runTest("wallet without signAndSendTransaction fails loudly", async () => {
     const wallet = {
       address: FROM,
       kind: "standard",
