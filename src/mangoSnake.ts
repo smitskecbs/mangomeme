@@ -26,6 +26,8 @@ import {
   blockedKeysForSpawn,
   canChangeSnakeLevel,
   freezeActiveLevel,
+  shouldShowSnakeLevelSelector,
+  SNAKE_LEVEL_SELECTOR_HIDDEN_CLASS,
   getInitialSnake,
   getObstaclesForLevel,
   getSnakeLevelDef,
@@ -246,6 +248,7 @@ function runMangoSnake(
   const levelButtons = Array.from(
     document.querySelectorAll<HTMLButtonElement>("[data-snake-level]")
   );
+  const levelSelect = document.getElementById("ms-level-select");
   const levelHud = document.getElementById("ms-level-label");
   const changeLevelBtn = document.getElementById("ms-change-level") as HTMLButtonElement | null;
   const overStats = document.getElementById("ms-over-stats");
@@ -426,6 +429,7 @@ function runMangoSnake(
     keys.clear();
     showPauseOverlay();
     updateSessionControls();
+    updateLevelUi();
   }
 
   function resumeSnakeRun(): void {
@@ -443,6 +447,7 @@ function runMangoSnake(
     lastTick = 0;
     hidePauseOverlay();
     updateSessionControls();
+    updateLevelUi();
   }
 
   function toggleSnakePause(): void {
@@ -633,6 +638,13 @@ function runMangoSnake(
 
     if (levelHud) {
       levelHud.textContent = def.buttonLabel;
+    }
+
+    const selectorVisible = shouldShowSnakeLevelSelector(state);
+    if (levelSelect) {
+      levelSelect.classList.toggle(SNAKE_LEVEL_SELECTOR_HIDDEN_CLASS, !selectorVisible);
+      levelSelect.hidden = !selectorVisible;
+      levelSelect.setAttribute("aria-hidden", selectorVisible ? "false" : "true");
     }
 
     const locked = !canChangeSnakeLevel(state);
@@ -901,6 +913,7 @@ function runMangoSnake(
     state = "ending";
     hidePauseOverlay();
     updateSessionControls();
+    updateLevelUi();
 
     if (reason === "wall" || reason === "obstacle") {
       clearArenaEffects();

@@ -33,6 +33,8 @@ import {
   saveStoredSnakeLevel,
   scoreForFiveMangoBonus,
   scoreForMango,
+  shouldShowSnakeLevelSelector,
+  SNAKE_LEVEL_SELECTOR_HIDDEN_CLASS,
   snakeDiesAt,
   startingSnakeOverlapsObstacles,
   wrapPoint,
@@ -267,6 +269,27 @@ runTest("restart keeps the selected level; change after game over works", () => 
   const selected = applySnakeLevelSelection(4, 4, "over");
   assert.equal(freezeActiveLevel(selected), 4);
   assert.equal(applySnakeLevelSelection(4, 1, "over"), 1);
+});
+
+runTest("difficulty selector is visible idle/over and takes no space while running", () => {
+  assert.equal(shouldShowSnakeLevelSelector("idle"), true);
+  assert.equal(shouldShowSnakeLevelSelector("playing"), false);
+  assert.equal(shouldShowSnakeLevelSelector("paused"), false);
+  assert.equal(shouldShowSnakeLevelSelector("ending"), false);
+  assert.equal(shouldShowSnakeLevelSelector("over"), true);
+  assert.equal(SNAKE_LEVEL_SELECTOR_HIDDEN_CLASS, "labs-snake-levels--hidden");
+
+  const css = readFileSync(join(ROOT, "styles.css"), "utf8");
+  assert.match(css, /\.labs-snake-levels--hidden[\s\S]{0,80}display:\s*none/);
+  assert.match(css, /\.labs-game-modal--playing \.labs-snake-dpad/);
+
+  const html = readFileSync(join(ROOT, "mango-labs.html"), "utf8");
+  assert.match(html, /id="ms-level-select"/);
+  assert.match(html, /id="ms-dpad"/);
+  assert.match(html, /id="ms-up"/);
+  assert.match(html, /id="ms-down"/);
+  assert.match(html, /id="ms-left"/);
+  assert.match(html, /id="ms-right"/);
 });
 
 runTest("personal-link submit body stays compatible and can add level metadata", () => {

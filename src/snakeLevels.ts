@@ -115,7 +115,14 @@ export function isSnakeLevelFreelySelectable(raw: unknown): boolean {
   return parseSnakeLevel(raw) !== null;
 }
 
+export const SNAKE_LEVEL_SELECTOR_HIDDEN_CLASS = "labs-snake-levels--hidden";
+
 export function canChangeSnakeLevel(state: SnakeSessionPhase): boolean {
+  return state === "idle" || state === "over";
+}
+
+/** Selector is shown only before play and after game over. Hidden states take no layout space. */
+export function shouldShowSnakeLevelSelector(state: SnakeSessionPhase): boolean {
   return state === "idle" || state === "over";
 }
 

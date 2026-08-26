@@ -1327,6 +1327,11 @@ body.labs-share-modal-open {
   padding: 0 0.75rem;
 }
 
+.labs-snake-levels--hidden,
+.labs-snake-levels[hidden] {
+  display: none;
+}
+
 .labs-snake-levels__heading {
   margin: 0 0 0.4rem;
   text-align: center;
