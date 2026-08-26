@@ -327,13 +327,58 @@ export function captureGameIdentityFromLocation(
 export function buildSnakeHighscoreBody(
   name: string,
   score: number,
-  token?: string | null
-): { name: string; score: number; t?: string } {
-  const body: { name: string; score: number; t?: string } = { name, score };
+  token?: string | null,
+  meta?: {
+    level?: number;
+    mangoCount?: number;
+    bonusMangoesEaten?: number;
+  }
+): {
+  name: string;
+  score: number;
+  t?: string;
+  level?: number;
+  mangoCount?: number;
+  bonusMangoesEaten?: number;
+} {
+  const body: {
+    name: string;
+    score: number;
+    t?: string;
+    level?: number;
+    mangoCount?: number;
+    bonusMangoesEaten?: number;
+  } = { name, score };
   const trimmed = typeof token === "string" ? token.trim() : "";
   if (trimmed) {
     body.t = trimmed;
   }
+
+  if (meta) {
+    if (
+      typeof meta.level === "number" &&
+      Number.isInteger(meta.level) &&
+      meta.level >= 1 &&
+      meta.level <= 4
+    ) {
+      body.level = meta.level;
+    }
+    if (
+      typeof meta.mangoCount === "number" &&
+      Number.isInteger(meta.mangoCount) &&
+      meta.mangoCount >= 0
+    ) {
+      body.mangoCount = meta.mangoCount;
+    }
+    if (
+      typeof meta.bonusMangoesEaten === "number" &&
+      Number.isInteger(meta.bonusMangoesEaten) &&
+      meta.bonusMangoesEaten >= 0
+    ) {
+      body.bonusMangoesEaten = meta.bonusMangoesEaten;
+    }
+  }
+
   return body;
 }
 

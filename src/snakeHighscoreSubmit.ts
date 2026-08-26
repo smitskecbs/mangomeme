@@ -116,7 +116,12 @@ function formatErrorBody(body: unknown): string {
 
 export async function submitSnakeHighscore(
   score: number,
-  name: string
+  name: string,
+  meta?: {
+    level?: number;
+    mangoCount?: number;
+    bonusMangoesEaten?: number;
+  }
 ): Promise<SnakeHighscoreSubmitResult> {
   const trimmedName = name.trim() || "ManGo Player";
   const requestUrl = HIGH_SCORE_API_URL;
@@ -194,7 +199,7 @@ export async function submitSnakeHighscore(
         "content-type": "application/json",
       },
       body: JSON.stringify(
-        buildSnakeHighscoreBody(trimmedName, score, getGameIdentityToken("snake"))
+        buildSnakeHighscoreBody(trimmedName, score, getGameIdentityToken("snake"), meta)
       ),
     });
 

@@ -18,16 +18,36 @@ import {
   type SnakeSessionState,
 } from "./snakeSessionControls.ts";
 import { resolvePlayerNameForAutofill } from "./mangoGameIdentity.ts";
+import {
+  SNAKE_BONUS_EVERY,
+  SNAKE_GRID_CELLS,
+  SNAKE_INITIAL_LENGTH,
+  applySnakeLevelSelection,
+  blockedKeysForSpawn,
+  canChangeSnakeLevel,
+  freezeActiveLevel,
+  getInitialSnake,
+  getObstaclesForLevel,
+  getSnakeLevelDef,
+  loadStoredSnakeLevel,
+  pickFreeCell,
+  saveStoredSnakeLevel,
+  scoreForFiveMangoBonus,
+  scoreForMango,
+  snakeDiesAt,
+  wrapPoint as wrapGridPoint,
+  type SnakeDifficultyLevel,
+} from "./snakeLevels.ts";
 
 const CONFIG = {
-  gridCells: 18,
+  gridCells: SNAKE_GRID_CELLS,
   tickMs: 130,
-  initialLength: 3,
+  initialLength: SNAKE_INITIAL_LENGTH,
   pointsPerMango: 10,
   foodPopMs: 360,
   wallHitMs: 200,
   gameOverShakeMs: 200,
-  bonusEvery: 5,
+  bonusEvery: SNAKE_BONUS_EVERY,
   bonusPoints: 50,
   bonusLifetimeMs: 4000,
   growthGlowMs: 420,
@@ -47,11 +67,14 @@ const CONFIG = {
     bonusGlow: "rgba(255, 214, 102, 0.65)",
     playfield: "#062a3a",
     idleOverlay: "rgba(6, 42, 58, 0.22)",
+    obstacleFill: "#0b2433",
+    obstacleStroke: "rgba(94, 217, 160, 0.42)",
+    obstacleInner: "rgba(255, 179, 71, 0.16)",
   },
 } as const;
 
 type GameState = SnakeSessionState;
-type DeathReason = "wall" | "self";
+type DeathReason = "wall" | "self" | "obstacle";
 type Direction = "up" | "down" | "left" | "right";
 
 interface Point {
@@ -188,6 +211,20 @@ function runMangoSnake(
   let foodPopStart = 0;
   let bonusMango: BonusMango | null = null;
   let mangoesEaten = 0;
+  let bonusMangoesEaten = 0;
+  let selectedLevel: SnakeDifficultyLevel = loadStoredSnakeLevel(
+    typeof localStorage === "undefined" ? null : localStorage
+  );
+  let activeLevel: SnakeDifficultyLevel = selectedLevel;
+  let pendingShareMeta: {
+    level: SnakeDifficultyLevel;
+    mangoCount: number;
+    bonusMangoesEaten: number;
+  } = {
+    level: selectedLevel,
+    mangoCount: 0,
+    bonusMangoesEaten: 0,
+  };
   let score = 0;
   let highScore = loadHighScore();
   let highScoreAtGameStart = highScore;
@@ -206,6 +243,18 @@ function runMangoSnake(
 
   const keys = new Set<string>();
   const arena = cnv.parentElement;
+  const levelButtons = Array.from(
+    document.querySelectorAll<HTMLButtonElement>("[data-snake-level]")
+  );
+  const levelHud = document.getElementById("ms-level-label");
+  const changeLevelBtn = document.getElementById("ms-change-level") as HTMLButtonElement | null;
+  const overStats = document.getElementById("ms-over-stats");
+  const overLevelNode = document.getElementById("ms-over-level");
+  const overMangoesNode = document.getElementById("ms-over-mangoes");
+  const overScoreNode = document.getElementById("ms-over-score");
+  const overBestNode = document.getElementById("ms-over-best");
+  const idleMessage =
+    "Choose a difficulty, then start. The snake wraps around every edge. Avoid biting your own tail or hitting obstacles. Collect mangoes and beat your best score.";
   const rootStyles = getComputedStyle(document.documentElement);
   const playfieldGradientStart = rootStyles.getPropertyValue("--ocean-mid").trim() || "#1a7a9e";
   const playfieldGradientEnd = rootStyles.getPropertyValue("--ocean-deep").trim() || "#0b4f6c";
@@ -299,30 +348,45 @@ function runMangoSnake(
     setModalPhase("idle");
     startPlayBtn.hidden = false;
     restartNode.hidden = true;
+    if (changeLevelBtn) {
+      changeLevelBtn.hidden = true;
+    }
     setOverlayScore(null);
-    msgNode.textContent =
-      "Use the arrow keys or WASD to move. The snake wraps around every edge. Avoid biting your own tail. Collect mangoes and beat your best score.";
+    setOverStatsVisible(false);
+    msgNode.textContent = idleMessage;
     hidePauseOverlay();
     updateSessionControls();
+    updateLevelUi();
   }
 
   function setPlayingOverlay(): void {
     setModalPhase("playing");
     startPlayBtn.hidden = true;
     restartNode.hidden = true;
+    if (changeLevelBtn) {
+      changeLevelBtn.hidden = true;
+    }
     setOverlayScore(null);
+    setOverStatsVisible(false);
     hidePauseOverlay();
     updateSessionControls();
+    updateLevelUi();
   }
 
   function setGameOverOverlay(message: string): void {
     setModalPhase("over");
     startPlayBtn.hidden = true;
     restartNode.hidden = false;
-    setOverlayScore(score);
+    if (changeLevelBtn) {
+      changeLevelBtn.hidden = false;
+    }
+    setOverlayScore(null);
+    fillOverStats();
+    setOverStatsVisible(true);
     msgNode.textContent = message;
     hidePauseOverlay();
     updateSessionControls();
+    updateLevelUi();
   }
 
   function hidePauseOverlay(): void {
@@ -464,9 +528,12 @@ function runMangoSnake(
     setIdleOverlay();
     startPlayBtn.hidden = false;
     restartNode.hidden = true;
+    if (changeLevelBtn) {
+      changeLevelBtn.hidden = true;
+    }
     setOverlayScore(null);
-    msgNode.textContent =
-      "Use the arrow keys or WASD to move. The snake wraps around every edge. Avoid biting your own tail. Collect mangoes and beat your best score.";
+    setOverStatsVisible(false);
+    msgNode.textContent = idleMessage;
   }
 
   activeClose = dismissSnakeSession;
@@ -544,73 +611,138 @@ function runMangoSnake(
     flushDeferredAchievementToasts();
   }
 
+  function boardConfig(): { cols: number; rows: number } {
+    return { cols: gridCols, rows: gridRows };
+  }
+
+  function displayLevel(): SnakeDifficultyLevel {
+    if (state === "playing" || state === "paused" || state === "ending") {
+      return activeLevel;
+    }
+
+    return selectedLevel;
+  }
+
+  function currentObstacles(): Set<string> {
+    return getObstaclesForLevel(displayLevel(), boardConfig());
+  }
+
+  function updateLevelUi(): void {
+    const shown = displayLevel();
+    const def = getSnakeLevelDef(shown);
+
+    if (levelHud) {
+      levelHud.textContent = def.buttonLabel;
+    }
+
+    const locked = !canChangeSnakeLevel(state);
+
+    for (const button of levelButtons) {
+      const levelValue = Number.parseInt(button.getAttribute("data-snake-level") || "", 10);
+      const isActive = levelValue === selectedLevel;
+      button.classList.toggle("is-active", isActive);
+      button.setAttribute("aria-pressed", isActive ? "true" : "false");
+      button.disabled = locked;
+    }
+  }
+
+  function setSelectedLevel(nextLevel: unknown): void {
+    selectedLevel = applySnakeLevelSelection(selectedLevel, nextLevel, state);
+    saveStoredSnakeLevel(
+      selectedLevel,
+      typeof localStorage === "undefined" ? null : localStorage
+    );
+
+    if (state === "idle") {
+      resetSnake();
+    }
+
+    updateLevelUi();
+    updateHud();
+  }
+
+  function fillOverStats(): void {
+    const def = getSnakeLevelDef(activeLevel);
+
+    if (overLevelNode) {
+      overLevelNode.textContent = def.fullName;
+    }
+
+    if (overMangoesNode) {
+      overMangoesNode.textContent = String(mangoesEaten);
+    }
+
+    if (overScoreNode) {
+      overScoreNode.textContent = String(score);
+    }
+
+    if (overBestNode) {
+      overBestNode.textContent = String(highScore);
+    }
+  }
+
+  function setOverStatsVisible(visible: boolean): void {
+    if (!overStats) {
+      return;
+    }
+
+    overStats.hidden = !visible;
+  }
+
   function updateHud(): void {
     scoreNode.textContent = String(score);
     highNode.textContent = String(highScore);
-  }
-
-  function occupiedCells(): Set<string> {
-    const occupied = new Set(snake.map((segment) => `${segment.x},${segment.y}`));
-    occupied.add(`${food.x},${food.y}`);
-
-    if (bonusMango) {
-      occupied.add(`${bonusMango.x},${bonusMango.y}`);
-    }
-
-    return occupied;
-  }
-
-  function spawnAtRandomFreeCell(): Point {
-    const occupied = occupiedCells();
-    let candidate: Point;
-
-    do {
-      candidate = {
-        x: Math.floor(Math.random() * gridCols),
-        y: Math.floor(Math.random() * gridRows),
-      };
-    } while (occupied.has(`${candidate.x},${candidate.y}`));
-
-    return candidate;
+    updateLevelUi();
   }
 
   function resetSnake(): void {
-    const midY = Math.floor(gridRows / 2);
-    const midX = Math.floor(gridCols / 2);
-
-    snake = Array.from({ length: CONFIG.initialLength }, (_, index) => ({
-      x: midX - index,
-      y: midY,
-    }));
-
+    snake = getInitialSnake(boardConfig());
     direction = "right";
     nextDirection = "right";
     score = 0;
     mangoesEaten = 0;
+    bonusMangoesEaten = 0;
     bonusMango = null;
     spawnFood();
     updateHud();
   }
 
   function spawnFood(): void {
-    food = spawnAtRandomFreeCell();
+    const next = pickFreeCell({
+      board: boardConfig(),
+      blocked: blockedKeysForSpawn({
+        snake,
+        obstacles: currentObstacles(),
+        bonus: bonusMango,
+      }),
+    });
+
+    if (!next) {
+      food = { x: -1, y: -1 };
+      return;
+    }
+
+    food = next;
     foodPopStart = performance.now();
   }
 
   function spawnBonusMango(): void {
-    const occupied = occupiedCells();
+    const next = pickFreeCell({
+      board: boardConfig(),
+      blocked: blockedKeysForSpawn({
+        snake,
+        obstacles: currentObstacles(),
+        food,
+      }),
+    });
 
-    let candidate: Point;
-    do {
-      candidate = {
-        x: Math.floor(Math.random() * gridCols),
-        y: Math.floor(Math.random() * gridRows),
-      };
-    } while (occupied.has(`${candidate.x},${candidate.y}`));
+    if (!next) {
+      return;
+    }
 
     bonusMango = {
-      x: candidate.x,
-      y: candidate.y,
+      x: next.x,
+      y: next.y,
       spawnedAt: performance.now(),
     };
   }
@@ -626,10 +758,7 @@ function runMangoSnake(
   }
 
   function wrapPoint(point: Point): Point {
-    return {
-      x: ((point.x % gridCols) + gridCols) % gridCols,
-      y: ((point.y % gridRows) + gridRows) % gridRows,
-    };
+    return wrapGridPoint(point, boardConfig());
   }
 
   function clearArenaEffects(): void {
@@ -650,6 +779,7 @@ function runMangoSnake(
     }
 
     highScoreAtGameStart = highScore;
+    activeLevel = freezeActiveLevel(selectedLevel);
     resetSnake();
     state = "playing";
     lastTick = 0;
@@ -677,8 +807,13 @@ function runMangoSnake(
       // Achievements must never block highscore share/submit.
     }
 
-    msgNode.textContent = message;
-    setGameOverOverlay(message);
+    msgNode.textContent = "💀 Game Over";
+    pendingShareMeta = {
+      level: activeLevel,
+      mangoCount: mangoesEaten,
+      bonusMangoesEaten,
+    };
+    setGameOverOverlay("💀 Game Over");
     updateHud();
 
     window.requestAnimationFrame(() => {
@@ -712,7 +847,7 @@ function runMangoSnake(
 
     setShareStatus("Submitting score...");
 
-    const result = await submitSnakeHighscore(pendingShareScore, name);
+    const result = await submitSnakeHighscore(pendingShareScore, name, pendingShareMeta);
 
     isSubmittingScore = false;
 
@@ -767,7 +902,7 @@ function runMangoSnake(
     hidePauseOverlay();
     updateSessionControls();
 
-    if (reason === "wall") {
+    if (reason === "wall" || reason === "obstacle") {
       clearArenaEffects();
       arena?.classList.add("labs-game-wrap--wall-hit");
 
@@ -897,17 +1032,26 @@ function runMangoSnake(
     const willEatBonus =
       bonusMango !== null && wrappedHead.x === bonusMango.x && wrappedHead.y === bonusMango.y;
     const willGrow = willEatFood || willEatBonus;
-    const bodyToCheck = willGrow ? snake : snake.slice(0, -1);
+    const death = snakeDiesAt(wrappedHead, {
+      body: snake,
+      obstacles: currentObstacles(),
+      willGrow,
+    });
 
-    if (bodyToCheck.some((segment) => segment.x === wrappedHead.x && segment.y === wrappedHead.y)) {
+    if (death === "self") {
       triggerGameOver("Game over — you bit yourself!", "self");
+      return;
+    }
+
+    if (death === "obstacle") {
+      triggerGameOver("Game over — you hit an obstacle!", "obstacle");
       return;
     }
 
     snake.unshift(wrappedHead);
 
     if (willEatFood) {
-      score += CONFIG.pointsPerMango;
+      score += scoreForMango(activeLevel);
       mangoesEaten += 1;
       growthGlowUntil = now + CONFIG.growthGlowMs;
 
@@ -917,7 +1061,8 @@ function runMangoSnake(
 
       spawnFood();
     } else if (willEatBonus) {
-      score += CONFIG.bonusPoints;
+      score += scoreForFiveMangoBonus(activeLevel);
+      bonusMangoesEaten += 1;
       bonusMango = null;
       growthGlowUntil = now + CONFIG.growthGlowMs;
     } else {
@@ -984,6 +1129,42 @@ function runMangoSnake(
     playfieldGradient.addColorStop(1, playfieldGradientEnd);
     gfx.fillStyle = playfieldGradient;
     gfx.fillRect(0, 0, width, height);
+  }
+
+  function drawObstacles(): void {
+    const obstacles = currentObstacles();
+
+    if (obstacles.size === 0) {
+      return;
+    }
+
+    const pad = Math.max(1, Math.min(cellW, cellH) * 0.08);
+
+    for (const key of obstacles) {
+      const [xRaw, yRaw] = key.split(":");
+      const x = Number.parseInt(xRaw, 10);
+      const y = Number.parseInt(yRaw, 10);
+
+      if (!Number.isInteger(x) || !Number.isInteger(y)) {
+        continue;
+      }
+
+      const left = x * cellW + pad;
+      const top = y * cellH + pad;
+      const sizeW = Math.max(1, cellW - pad * 2);
+      const sizeH = Math.max(1, cellH - pad * 2);
+
+      gfx.fillStyle = CONFIG.colors.obstacleFill;
+      gfx.strokeStyle = CONFIG.colors.obstacleStroke;
+      gfx.lineWidth = Math.max(1, Math.min(cellW, cellH) * 0.08);
+      gfx.beginPath();
+      gfx.roundRect(left, top, sizeW, sizeH, Math.min(sizeW, sizeH) * 0.18);
+      gfx.fill();
+      gfx.stroke();
+
+      gfx.fillStyle = CONFIG.colors.obstacleInner;
+      gfx.fillRect(left + sizeW * 0.22, top + sizeH * 0.22, sizeW * 0.56, sizeH * 0.56);
+    }
   }
 
   function drawGrowthGlow(now: number): void {
@@ -1168,6 +1349,7 @@ function runMangoSnake(
 
   function draw(now: number): void {
     drawBackground();
+    drawObstacles();
     drawFood(now);
     drawBonusMango(now);
     drawGrowthGlow(now);
@@ -1352,6 +1534,28 @@ function runMangoSnake(
     startGame();
   });
 
+  changeLevelBtn?.addEventListener("click", () => {
+    if (state !== "over") {
+      return;
+    }
+
+    closeShareModal();
+    resetSnake();
+    state = "idle";
+    lastTick = 0;
+    setIdleOverlay();
+
+    window.requestAnimationFrame(() => {
+      startPlayBtn.focus();
+    });
+  });
+
+  for (const button of levelButtons) {
+    button.addEventListener("click", () => {
+      setSelectedLevel(button.getAttribute("data-snake-level"));
+    });
+  }
+
   pauseBtn?.addEventListener("click", () => {
     toggleSnakePause();
   });
@@ -1415,6 +1619,7 @@ function runMangoSnake(
   highScore = loadHighScore();
   resetSnake();
   updateHud();
+  updateLevelUi();
   animationId = requestAnimationFrame(loop);
 
   window.addEventListener("beforeunload", () => {
