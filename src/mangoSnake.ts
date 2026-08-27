@@ -8,13 +8,9 @@ import {
 } from "./snakeScoreResult.ts";
 import { snakeAchievementsForRun, unlockAchievements, flushDeferredAchievementToasts } from "./mangoAchievements.ts";
 import {
-  canStopSnakeRun,
   canToggleSnakePause,
   planSnakeGameOverSideEffects,
-  snakePauseButtonLabel,
   snakeStateAfterPauseToggle,
-  snakeStateAfterStop,
-  shouldShowSnakeSessionControls,
   type SnakeSessionState,
 } from "./snakeSessionControls.ts";
 import { resolvePlayerNameForAutofill } from "./mangoGameIdentity.ts";
@@ -125,8 +121,6 @@ export function initMangoSnake(): void {
   const submitScoreBtn = document.getElementById("ms-submit-score") as HTMLButtonElement | null;
   const skipScoreBtn = document.getElementById("ms-skip-score") as HTMLButtonElement | null;
   const shareDoneBtn = document.getElementById("ms-share-done") as HTMLButtonElement | null;
-  const pauseBtn = document.getElementById("ms-pause") as HTMLButtonElement | null;
-  const stopBtn = document.getElementById("ms-stop") as HTMLButtonElement | null;
   const pauseOverlay = document.getElementById("ms-pause-overlay");
 
   if (!canvas || !scoreNode || !highNode || !msgNode || !restartNode || !startPlayBtn) {
@@ -162,8 +156,6 @@ export function initMangoSnake(): void {
     submitScoreBtn,
     skipScoreBtn,
     shareDoneBtn,
-    pauseBtn,
-    stopBtn,
     pauseOverlay,
     document.getElementById("ms-dpad"),
     document.getElementById("ms-up"),
@@ -196,8 +188,6 @@ function runMangoSnake(
   submitScoreBtn: HTMLButtonElement | null,
   skipScoreBtn: HTMLButtonElement | null,
   shareDoneBtn: HTMLButtonElement | null,
-  pauseBtn: HTMLButtonElement | null,
-  stopBtn: HTMLButtonElement | null,
   pauseOverlay: HTMLElement | null,
   dpad: HTMLElement | null,
   upBtn: HTMLElement | null,
@@ -358,7 +348,6 @@ function runMangoSnake(
     setOverStatsVisible(false);
     msgNode.textContent = idleMessage;
     hidePauseOverlay();
-    updateSessionControls();
     updateLevelUi();
   }
 
@@ -372,7 +361,6 @@ function runMangoSnake(
     setOverlayScore(null);
     setOverStatsVisible(false);
     hidePauseOverlay();
-    updateSessionControls();
     updateLevelUi();
   }
 
@@ -388,7 +376,6 @@ function runMangoSnake(
     setOverStatsVisible(true);
     msgNode.textContent = message;
     hidePauseOverlay();
-    updateSessionControls();
     updateLevelUi();
   }
 
@@ -398,19 +385,6 @@ function runMangoSnake(
 
   function showPauseOverlay(): void {
     pauseOverlay?.removeAttribute("hidden");
-  }
-
-  function updateSessionControls(): void {
-    const show = shouldShowSnakeSessionControls(state);
-
-    if (pauseBtn) {
-      pauseBtn.hidden = !show;
-      pauseBtn.textContent = snakePauseButtonLabel(state);
-    }
-
-    if (stopBtn) {
-      stopBtn.hidden = !show;
-    }
   }
 
   function pauseSnakeRun(): void {
@@ -428,7 +402,6 @@ function runMangoSnake(
     lastTick = 0;
     keys.clear();
     showPauseOverlay();
-    updateSessionControls();
     updateLevelUi();
   }
 
@@ -446,7 +419,6 @@ function runMangoSnake(
     state = "playing";
     lastTick = 0;
     hidePauseOverlay();
-    updateSessionControls();
     updateLevelUi();
   }
 
@@ -459,30 +431,6 @@ function runMangoSnake(
     if (state === "paused") {
       resumeSnakeRun();
     }
-  }
-
-  /** Abort the current attempt without game-over, submit, or achievements. */
-  function stopSnakeRun(): void {
-    if (!canStopSnakeRun(state) || snakeStateAfterStop(state) !== "idle") {
-      return;
-    }
-
-    if (endTimeoutId) {
-      window.clearTimeout(endTimeoutId);
-      endTimeoutId = 0;
-    }
-
-    clearArenaEffects();
-    closeShareModal();
-    keys.clear();
-    resetSnake();
-    state = "idle";
-    lastTick = 0;
-    setIdleOverlay();
-
-    window.requestAnimationFrame(() => {
-      startPlayBtn.focus();
-    });
   }
 
   function openGameModal(): void {
@@ -912,7 +860,6 @@ function runMangoSnake(
 
     state = "ending";
     hidePauseOverlay();
-    updateSessionControls();
     updateLevelUi();
 
     if (reason === "wall" || reason === "obstacle") {
@@ -1568,14 +1515,6 @@ function runMangoSnake(
       setSelectedLevel(button.getAttribute("data-snake-level"));
     });
   }
-
-  pauseBtn?.addEventListener("click", () => {
-    toggleSnakePause();
-  });
-
-  stopBtn?.addEventListener("click", () => {
-    stopSnakeRun();
-  });
 
   openGameBtn?.addEventListener("click", () => {
     prepareGameModal();
