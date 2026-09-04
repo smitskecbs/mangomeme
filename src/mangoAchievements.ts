@@ -1,10 +1,9 @@
 /**
- * ManGo Labs Achievements V1 — local unlocks, gallery, and share-to-X.
- * Fully client-side; no backend.
+ * ManGo Labs Achievements V1 — local unlocks and gallery.
+ * Fully client-side; no backend. No Share on X.
  */
 
 export const ACHIEVEMENTS_STORAGE_KEY = "mango-labs-achievements";
-export const LABS_PAGE_URL = "https://www.mangomeme.fun/mango-labs";
 
 export type AchievementGame = "snake" | "bounch";
 
@@ -18,16 +17,13 @@ export interface AchievementDef {
 
 export interface UnlockedRecord {
   unlockedAt: number;
-  /** Set when the player clicked Share on X (intent opened); not proof of a published post. */
+  /** Legacy field from Share on X; kept in storage, unused in UI. */
   sharedAt?: number;
 }
 
 export type AchievementsMap = Record<string, UnlockedRecord>;
 
-/** Consistent label shown after a local Share on X click. */
-export const ACHIEVEMENT_SHARED_LABEL = "📣 Shared";
-
-export type AchievementShareUiState = "share" | "shared" | "none";
+export type AchievementShareUiState = "none";
 
 export interface AchievementStorage {
   getItem(key: string): string | null;
@@ -41,7 +37,7 @@ export interface UnlockOptions {
   notify?: boolean;
   /**
    * Persist unlock + refresh gallery, but queue toasts until
-   * flushDeferredAchievementToasts() — keeps share/submit UI unblocked.
+   * flushDeferredAchievementToasts() — keeps submit UI unblocked.
    */
   deferToast?: boolean;
 }
@@ -231,26 +227,20 @@ export function isAchievementShared(id: string, storage?: AchievementStorage): b
 }
 
 /**
- * Gallery/toast share control model for one achievement id.
- * Locked, unknown, or Bounch → none (Bounch does not offer Share on X).
- * Snake unlocked unshared → share; Snake unlocked shared → shared.
+ * Share UI is disabled for all achievements. Kept so callers can query a stable none state.
  */
 export function getAchievementShareUiState(
   id: string,
   storage?: AchievementStorage
 ): AchievementShareUiState {
-  const def = getAchievementById(id);
-
-  if (!def || def.game !== "snake" || !isAchievementUnlocked(id, storage)) {
-    return "none";
-  }
-
-  return isAchievementShared(id, storage) ? "shared" : "share";
+  void id;
+  void storage;
+  return "none";
 }
 
 /**
- * Mark an unlocked achievement as locally shared after Share on X was clicked.
- * Unknown / locked ids are ignored. Re-marking is safe and keeps unlockedAt.
+ * Legacy helper: still records sharedAt in storage if already unlocked.
+ * Does not open X or change visible UI.
  */
 export function markAchievementShared(
   id: string,
@@ -314,42 +304,16 @@ export function bounchAchievementForLevelClear(levelId: number): string | null {
   return BOUNCH_LEVEL_ACHIEVEMENTS[levelId] ?? null;
 }
 
-export function buildAchievementShareText(achievement: AchievementDef): string {
-  const leadingEmoji = achievement.game === "snake" ? "🥭🐍" : `🥭${achievement.icon}`;
-  const challenge =
-    achievement.game === "snake" ? "Think you can beat it?" : "Can you clear it too?";
-
-  return `I just unlocked "${achievement.title}" in ManGo Labs ${leadingEmoji}\n\n${challenge}\n\n${LABS_PAGE_URL}`;
-}
-
-export function buildAchievementShareUrl(achievement: AchievementDef): string {
-  const text = buildAchievementShareText(achievement);
-  return `https://twitter.com/intent/tweet?text=${encodeURIComponent(text)}`;
-}
-
-export function openAchievementShare(achievement: AchievementDef): void {
-  window.open(buildAchievementShareUrl(achievement), "_blank", "noopener,noreferrer");
-}
-
 /**
- * Open the X intent and mark the achievement as locally shared.
- * Returns false when the id is unknown or not unlocked.
+ * Share on X is disabled. Always returns false and never opens an intent.
  */
 export function shareAchievementOnX(
   id: string,
   options: { storage?: AchievementStorage; now?: number } = {}
 ): boolean {
-  const def = getAchievementById(id);
-
-  if (!def || def.game !== "snake" || !isAchievementUnlocked(id, options.storage)) {
-    return false;
-  }
-
-  openAchievementShare(def);
-  markAchievementShared(id, options);
-  renderGallery();
-  syncActiveToastShareUi();
-  return true;
+  void id;
+  void options;
+  return false;
 }
 
 /**
@@ -429,14 +393,6 @@ function renderGallery(): void {
   for (const def of ACHIEVEMENTS) {
     const unlocked = Boolean(map[def.id]);
     const status = unlocked ? "Unlocked" : "Locked";
-    const shareUi = getAchievementShareUiState(def.id);
-    let shareControl = "";
-
-    if (shareUi === "share") {
-      shareControl = `<button type="button" class="btn btn-copy labs-achievement-card__share" data-achievement-id="${def.id}">Share on X</button>`;
-    } else if (shareUi === "shared") {
-      shareControl = `<span class="labs-achievement-card__shared">${ACHIEVEMENT_SHARED_LABEL}</span>`;
-    }
 
     parts.push(`
       <article class="labs-achievement-card${unlocked ? "" : " labs-achievement-card--locked"}" data-achievement-id="${def.id}">
@@ -446,7 +402,6 @@ function renderGallery(): void {
         </div>
         <h3 class="labs-achievement-card__title">${def.title}</h3>
         <p class="labs-achievement-card__desc">${def.description}</p>
-        ${shareControl}
       </article>
     `);
   }
@@ -459,49 +414,19 @@ function getToastElements(): {
   icon: HTMLElement;
   title: HTMLElement;
   desc: HTMLElement;
-  share: HTMLButtonElement;
-  shared: HTMLElement;
   close: HTMLButtonElement;
 } | null {
   const root = document.getElementById("ma-toast");
   const icon = document.getElementById("ma-toast-icon");
   const title = document.getElementById("ma-toast-title");
   const desc = document.getElementById("ma-toast-desc");
-  const share = document.getElementById("ma-toast-share") as HTMLButtonElement | null;
-  const shared = document.getElementById("ma-toast-shared");
   const close = document.getElementById("ma-toast-close") as HTMLButtonElement | null;
 
-  if (!root || !icon || !title || !desc || !share || !shared || !close) {
+  if (!root || !icon || !title || !desc || !close) {
     return null;
   }
 
-  return { root, icon, title, desc, share, shared, close };
-}
-
-function syncActiveToastShareUi(): void {
-  const els = getToastElements();
-
-  if (!els || !toastActive) {
-    return;
-  }
-
-  const shareUi = getAchievementShareUiState(toastActive.id);
-
-  if (shareUi === "share") {
-    els.share.hidden = false;
-    els.shared.hidden = true;
-    return;
-  }
-
-  if (shareUi === "shared") {
-    els.share.hidden = true;
-    els.shared.hidden = false;
-    els.shared.textContent = ACHIEVEMENT_SHARED_LABEL;
-    return;
-  }
-
-  els.share.hidden = true;
-  els.shared.hidden = true;
+  return { root, icon, title, desc, close };
 }
 
 function showToast(achievement: AchievementDef): void {
@@ -515,7 +440,6 @@ function showToast(achievement: AchievementDef): void {
   els.icon.textContent = achievement.icon;
   els.title.textContent = achievement.title;
   els.desc.textContent = achievement.description;
-  syncActiveToastShareUi();
   els.root.removeAttribute("hidden");
   document.body.classList.add("labs-achievement-toast-open");
 
@@ -582,50 +506,10 @@ function bindToastControls(): void {
     advanceToastQueue();
   });
 
-  els.share.addEventListener("click", () => {
-    if (!toastActive) {
-      return;
-    }
-
-    shareAchievementOnX(toastActive.id);
-  });
-
   els.root.addEventListener("click", (event) => {
     if (event.target === els.root) {
       advanceToastQueue();
     }
-  });
-}
-
-function bindGalleryShares(): void {
-  const grid = document.getElementById("ma-gallery");
-
-  if (!grid || grid.dataset.maBound === "1") {
-    return;
-  }
-
-  grid.dataset.maBound = "1";
-
-  grid.addEventListener("click", (event) => {
-    const target = event.target;
-
-    if (!(target instanceof HTMLElement)) {
-      return;
-    }
-
-    const button = target.closest<HTMLButtonElement>("button.labs-achievement-card__share");
-
-    if (!button || button.disabled) {
-      return;
-    }
-
-    const id = button.getAttribute("data-achievement-id");
-
-    if (!id) {
-      return;
-    }
-
-    shareAchievementOnX(id);
   });
 }
 
@@ -646,6 +530,5 @@ export function initMangoAchievements(): void {
   };
 
   bindToastControls();
-  bindGalleryShares();
   renderGallery();
 }

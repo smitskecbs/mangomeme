@@ -7,11 +7,7 @@ import assert from "node:assert/strict";
 import {
   ACHIEVEMENTS,
   ACHIEVEMENTS_STORAGE_KEY,
-  ACHIEVEMENT_SHARED_LABEL,
-  LABS_PAGE_URL,
   bounchAchievementForLevelClear,
-  buildAchievementShareText,
-  buildAchievementShareUrl,
   getAchievementById,
   getAchievementShareUiState,
   getUnlockedAchievements,
@@ -199,19 +195,12 @@ runTest("Level 3/5/7 → juiste achievement", () => {
   assert.equal(bounchAchievementForLevelClear(7), "bounch-level-7");
 });
 
-runTest("share URL bevat correct geëncodeerde tekst en Labs-link", () => {
-  const climber = getAchievementById("snake-score-500");
-  assert.ok(climber);
-
-  const snakeText = buildAchievementShareText(climber);
-  assert.match(snakeText, /Snake Climber/);
-  assert.match(snakeText, /Think you can beat it\?/);
-  assert.match(snakeText, new RegExp(LABS_PAGE_URL.replace(/\./g, "\\.")));
-
-  const snakeUrl = buildAchievementShareUrl(climber);
-  assert.ok(snakeUrl.startsWith("https://twitter.com/intent/tweet?text="));
-  assert.ok(snakeUrl.includes(encodeURIComponent(snakeText)));
-  assert.ok(snakeUrl.includes(encodeURIComponent(LABS_PAGE_URL)));
+runTest("Share on X is volledig uit de achievement-UI", () => {
+  const storage = createMemoryStorage();
+  unlockAchievement("snake-score-500", { storage, now: 1, notify: false });
+  assert.equal(getAchievementShareUiState("snake-score-500", storage), "none");
+  assert.equal(shareAchievementOnX("snake-score-500", { storage, now: 2 }), false);
+  assert.equal(isAchievementShared("snake-score-500", storage), false);
 });
 
 runTest("oude storage met onbekende ids blijft bruikbaar", () => {
@@ -242,7 +231,7 @@ runTest("unlocked achievement start als niet gedeeld", () => {
   const storage = createMemoryStorage();
   unlockAchievement("snake-first-game", { storage, now: 1, notify: false });
   assert.equal(isAchievementShared("snake-first-game", storage), false);
-  assert.equal(getAchievementShareUiState("snake-first-game", storage), "share");
+  assert.equal(getAchievementShareUiState("snake-first-game", storage), "none");
   assert.equal(loadAchievementsMap(storage)["snake-first-game"].sharedAt, undefined);
 });
 
@@ -286,7 +275,7 @@ runTest("één gedeeld achievement beïnvloedt een ander niet", () => {
   markAchievementShared("snake-first-game", { storage, now: 50 });
   assert.equal(isAchievementShared("snake-first-game", storage), true);
   assert.equal(isAchievementShared("snake-score-100", storage), false);
-  assert.equal(getAchievementShareUiState("snake-score-100", storage), "share");
+  assert.equal(getAchievementShareUiState("snake-score-100", storage), "none");
 });
 
 runTest("oude storage zonder sharedAt blijft geldig", () => {
@@ -297,7 +286,7 @@ runTest("oude storage zonder sharedAt blijft geldig", () => {
   });
   assert.equal(isAchievementUnlocked("snake-first-game", storage), true);
   assert.equal(isAchievementShared("snake-first-game", storage), false);
-  assert.equal(getAchievementShareUiState("snake-first-game", storage), "share");
+  assert.equal(getAchievementShareUiState("snake-first-game", storage), "none");
   assert.equal(parseAchievementsStorage('{"snake-first-game":{"unlockedAt":12}}')["snake-first-game"].sharedAt, undefined);
 });
 
@@ -309,18 +298,13 @@ runTest("locked/onbekende id kan niet foutief gedeeld worden", () => {
   assert.equal(getAchievementShareUiState("ghost", storage), "none");
 });
 
-runTest("gallery-model geeft Share voor unlocked/unshared Snake", () => {
+runTest("gallery-model toont geen Share of Shared voor Snake", () => {
   const storage = createMemoryStorage();
   unlockAchievement("snake-first-game", { storage, now: 6, notify: false });
-  assert.equal(getAchievementShareUiState("snake-first-game", storage), "share");
-});
-
-runTest("gallery-model geeft Shared voor unlocked/shared Snake", () => {
-  const storage = createMemoryStorage();
-  unlockAchievement("snake-first-game", { storage, now: 6, notify: false });
+  assert.equal(getAchievementShareUiState("snake-first-game", storage), "none");
   markAchievementShared("snake-first-game", { storage, now: 60 });
-  assert.equal(getAchievementShareUiState("snake-first-game", storage), "shared");
-  assert.equal(ACHIEVEMENT_SHARED_LABEL, "📣 Shared");
+  assert.equal(getAchievementShareUiState("snake-first-game", storage), "none");
+  assert.equal(shareAchievementOnX("snake-first-game", { storage }), false);
 });
 
 runTest("Bounch achievements bieden geen Share on X, ook niet na unlock", () => {
