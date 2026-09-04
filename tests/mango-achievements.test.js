@@ -21,6 +21,7 @@ import {
   markAchievementShared,
   parseAchievementsStorage,
   snakeAchievementsForRun,
+  shareAchievementOnX,
   unlockAchievement,
   unlockAchievements,
 } from "../src/mangoAchievements.ts";
@@ -200,9 +201,7 @@ runTest("Level 3/5/7 → juiste achievement", () => {
 
 runTest("share URL bevat correct geëncodeerde tekst en Labs-link", () => {
   const climber = getAchievementById("snake-score-500");
-  const master = getAchievementById("bounch-level-7");
   assert.ok(climber);
-  assert.ok(master);
 
   const snakeText = buildAchievementShareText(climber);
   assert.match(snakeText, /Snake Climber/);
@@ -213,14 +212,6 @@ runTest("share URL bevat correct geëncodeerde tekst en Labs-link", () => {
   assert.ok(snakeUrl.startsWith("https://twitter.com/intent/tweet?text="));
   assert.ok(snakeUrl.includes(encodeURIComponent(snakeText)));
   assert.ok(snakeUrl.includes(encodeURIComponent(LABS_PAGE_URL)));
-
-  const bounchText = buildAchievementShareText(master);
-  assert.match(bounchText, /Bounch Master/);
-  assert.match(bounchText, /Can you reach Level 7\?/);
-  assert.match(bounchText, new RegExp(LABS_PAGE_URL.replace(/\./g, "\\.")));
-
-  const bounchUrl = buildAchievementShareUrl(master);
-  assert.ok(bounchUrl.includes(encodeURIComponent(bounchText)));
 });
 
 runTest("oude storage met onbekende ids blijft bruikbaar", () => {
@@ -318,18 +309,39 @@ runTest("locked/onbekende id kan niet foutief gedeeld worden", () => {
   assert.equal(getAchievementShareUiState("ghost", storage), "none");
 });
 
-runTest("gallery-model geeft Share voor unlocked/unshared", () => {
+runTest("gallery-model geeft Share voor unlocked/unshared Snake", () => {
   const storage = createMemoryStorage();
-  unlockAchievement("bounch-level-1", { storage, now: 6, notify: false });
-  assert.equal(getAchievementShareUiState("bounch-level-1", storage), "share");
+  unlockAchievement("snake-first-game", { storage, now: 6, notify: false });
+  assert.equal(getAchievementShareUiState("snake-first-game", storage), "share");
 });
 
-runTest("gallery-model geeft Shared voor unlocked/shared", () => {
+runTest("gallery-model geeft Shared voor unlocked/shared Snake", () => {
+  const storage = createMemoryStorage();
+  unlockAchievement("snake-first-game", { storage, now: 6, notify: false });
+  markAchievementShared("snake-first-game", { storage, now: 60 });
+  assert.equal(getAchievementShareUiState("snake-first-game", storage), "shared");
+  assert.equal(ACHIEVEMENT_SHARED_LABEL, "📣 Shared");
+});
+
+runTest("Bounch achievements bieden geen Share on X, ook niet na unlock", () => {
   const storage = createMemoryStorage();
   unlockAchievement("bounch-level-1", { storage, now: 6, notify: false });
-  markAchievementShared("bounch-level-1", { storage, now: 60 });
-  assert.equal(getAchievementShareUiState("bounch-level-1", storage), "shared");
-  assert.equal(ACHIEVEMENT_SHARED_LABEL, "📣 Shared");
+  assert.equal(isAchievementUnlocked("bounch-level-1", storage), true);
+  assert.equal(getAchievementShareUiState("bounch-level-1", storage), "none");
+  assert.equal(shareAchievementOnX("bounch-level-1", { storage, now: 7 }), false);
+  assert.equal(isAchievementShared("bounch-level-1", storage), false);
+});
+
+runTest("bestaande Bounch sharedAt blijft bewaard maar toont geen X-share UI", () => {
+  const storage = createMemoryStorage({
+    [ACHIEVEMENTS_STORAGE_KEY]: JSON.stringify({
+      "bounch-level-1": { unlockedAt: 6, sharedAt: 60 },
+    }),
+  });
+  assert.equal(isAchievementUnlocked("bounch-level-1", storage), true);
+  assert.equal(isAchievementShared("bounch-level-1", storage), true);
+  assert.equal(getAchievementShareUiState("bounch-level-1", storage), "none");
+  assert.equal(loadAchievementsMap(storage)["bounch-level-1"].sharedAt, 60);
 });
 
 console.log("All mango achievements tests passed.");

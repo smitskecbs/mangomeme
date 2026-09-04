@@ -232,13 +232,16 @@ export function isAchievementShared(id: string, storage?: AchievementStorage): b
 
 /**
  * Gallery/toast share control model for one achievement id.
- * Locked or unknown → none; unlocked unshared → share; unlocked shared → shared.
+ * Locked, unknown, or Bounch → none (Bounch does not offer Share on X).
+ * Snake unlocked unshared → share; Snake unlocked shared → shared.
  */
 export function getAchievementShareUiState(
   id: string,
   storage?: AchievementStorage
 ): AchievementShareUiState {
-  if (!getAchievementById(id) || !isAchievementUnlocked(id, storage)) {
+  const def = getAchievementById(id);
+
+  if (!def || def.game !== "snake" || !isAchievementUnlocked(id, storage)) {
     return "none";
   }
 
@@ -312,20 +315,9 @@ export function bounchAchievementForLevelClear(levelId: number): string | null {
 }
 
 export function buildAchievementShareText(achievement: AchievementDef): string {
-  // Snake examples use 🥭🐍; Bounch pairs mango with the badge icon.
   const leadingEmoji = achievement.game === "snake" ? "🥭🐍" : `🥭${achievement.icon}`;
-
-  let challenge: string;
-
-  if (achievement.game === "snake") {
-    challenge = "Think you can beat it?";
-  } else if (achievement.id === "bounch-level-7") {
-    challenge = "Can you reach Level 7?";
-  } else if (achievement.id === "bounch-level-1") {
-    challenge = "Can you clear Level 1?";
-  } else {
-    challenge = "Can you clear it too?";
-  }
+  const challenge =
+    achievement.game === "snake" ? "Think you can beat it?" : "Can you clear it too?";
 
   return `I just unlocked "${achievement.title}" in ManGo Labs ${leadingEmoji}\n\n${challenge}\n\n${LABS_PAGE_URL}`;
 }
@@ -349,7 +341,7 @@ export function shareAchievementOnX(
 ): boolean {
   const def = getAchievementById(id);
 
-  if (!def || !isAchievementUnlocked(id, options.storage)) {
+  if (!def || def.game !== "snake" || !isAchievementUnlocked(id, options.storage)) {
     return false;
   }
 
@@ -495,6 +487,12 @@ function syncActiveToastShareUi(): void {
 
   const shareUi = getAchievementShareUiState(toastActive.id);
 
+  if (shareUi === "share") {
+    els.share.hidden = false;
+    els.shared.hidden = true;
+    return;
+  }
+
   if (shareUi === "shared") {
     els.share.hidden = true;
     els.shared.hidden = false;
@@ -502,7 +500,7 @@ function syncActiveToastShareUi(): void {
     return;
   }
 
-  els.share.hidden = false;
+  els.share.hidden = true;
   els.shared.hidden = true;
 }
 
